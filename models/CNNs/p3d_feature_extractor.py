@@ -21,9 +21,6 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 	def __init__(self):
 		super().__init__(extractor, size)
 
-	def forward(self, x):
-		return self.extractor(x)
-
 	def extract_features(self, imgs, img_ids, out, name, device):
 		avg_dir = join(out, 'avg')
 		sample_dir = join(out, 'sample')
