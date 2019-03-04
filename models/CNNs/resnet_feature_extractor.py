@@ -8,27 +8,29 @@ import torch.nn as nn
 from os.path import join
 from PIL import Image
 from torchvision import models
-from utils import transform_img
+
+from .base_feature_extractor import BaseFeatureExtractor
+from utils import transform_img, make_clean_path
 
 size = 224
+model = models.resnet152(pretrained=True)
+extractor = nn.Sequential(*list(model.children())[:-1])
 
-class ResNetFeatureExtractor(nn.Module):
+class ResNetFeatureExtractor(BaseFeatureExtractor):
 
 	def __init__(self):
-		super().__init__()
-		model = models.resnet152(pretrained=True)
-		self.extractor = nn.Sequential(*list(model.children())[:-1])
-		for param in self.extractor:
-			param.requires_grad = False
+		super().__init__(extractor, size)
 
 	def forward(self, x):
 		return self.extractor(x)
 
-	def extract_features(self, imgs, outpath, img_ids, device):
+	def extract_features(self, imgs, img_ids, out, name, device):
+		outpath = join(out, name)
+		make_clean_path(outpath)
 		combined_imgs = []
 		for img_path in imgs:
 			img = Image.open(img_path).convert('RGB')
-			img = transform_img(img, size=size)
+			img = transform_img(img, size=self.size)
 			combined_imgs.append(img)
 
 		x = torch.stack(combined_imgs)

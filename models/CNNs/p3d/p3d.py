@@ -1,3 +1,5 @@
+# NOTE: We are not the original authors of this code. This was adapted from: https://github.com/qijiezhao/pseudo-3d-pytorch.git.
+
 from __future__ import print_function
 import torch
 import torch.nn as nn
@@ -256,16 +258,18 @@ class P3D(nn.Module):
         x = self.maxpool(x)
 
         x = self.maxpool_2(self.layer1(x))  #  Part Res2
-        x = self.maxpool_2(self.layer2(x))  #  Part Res3
-        x = self.maxpool_2(self.layer3(x))  #  Part Res4
+        x = self.layer2(x)
+        x = self.layer3(x)
+        #x = self.maxpool_2(self.layer2(x))  #  Part Res3
+        #x = self.maxpool_2(self.layer3(x))  #  Part Res4
 
-        sizes=x.size()
+        """sizes=x.size()
         x = x.view(-1,sizes[1],sizes[3],sizes[4])  #  Part Res5
         x = self.layer4(x)
         x = self.avgpool(x)
 
         x = x.view(-1,self.fc.in_features)
-        x = self.fc(self.dropout(x))
+        x = self.fc(self.dropout(x))"""
 
         return x
 
@@ -288,7 +292,7 @@ def P3D199(pretrained=False,modality='RGB',**kwargs):
     model = P3D(Bottleneck, [3, 8, 36, 3], modality=modality,**kwargs)
     if pretrained==True:
         if modality=='RGB':
-            pretrained_file='p3d_rgb_199.checkpoint.pth.tar'
+            pretrained_file='/Users/Jason/Desktop/cs224n-project/models/CNNs/p3d/p3d_rgb_199.checkpoint.pth.tar'
         elif modality=='Flow':
             pretrained_file='p3d_flow_199.checkpoint.pth.tar'
         weights=torch.load(pretrained_file)['state_dict']

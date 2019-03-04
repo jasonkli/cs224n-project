@@ -52,9 +52,7 @@ def main():
 		name = basename(normpath(video)).split('.')[0]
 		print(i, name)
 		outpath = join(out, name)
-		if exists(outpath):
-			os.system('rm -rf {}'.format(outpath))
-		os.mkdir(outpath)
+		make_clean_path(outpath)
 
 		count = extract_images(video, outpath)
 

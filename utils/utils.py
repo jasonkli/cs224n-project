@@ -1,4 +1,5 @@
 import argparse
+import os
 import torchvision.transforms as transforms
 
 MEAN = [0.485, 0.456, 0.406]
@@ -21,3 +22,12 @@ def transform_img(img, size):
 	transform = transforms.Compose(transform_list)
 
 	return transform(img)
+
+def make_clean_path(path):	
+	if os.path.exists(path):
+		os.system('rm -rf {}'.format(path))
+	os.mkdir(path)
+
+def make_safe_path(path):
+	if not os.path.exists(path):
+		os.mkdir(path)
