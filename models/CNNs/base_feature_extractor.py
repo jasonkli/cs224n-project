@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).absolute().parent.parent))
 
+import torch
 import torch.nn as nn
 
 class BaseFeatureExtractor(nn.Module):
@@ -17,5 +18,10 @@ class BaseFeatureExtractor(nn.Module):
 	def forward(self, x):
 		return self.extractor(x)
 
-	def extract_features(self):
+	def extract_features(self, x, device='cpu'):
+		with torch.no_grad():
+			features = self(x.to(device))
+		return features
+
+	def preprocess(self):
 		raise NotImplementedError

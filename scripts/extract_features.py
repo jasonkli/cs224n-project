@@ -36,7 +36,7 @@ def main():
 		imgs = [join(img_dir, f) for f in listdir(img_dir) if isfile(join(img_dir, f)) and '.jpg' in f]
 		imgs = sorted(imgs, key=lambda x: int(basename(normpath(x)).split('.')[0]))
 		img_ids = sorted([int(basename(normpath(img)).split('.')[0]) for img in imgs])
-		model.extract_features(imgs, img_ids, out, name, device)
+		model.preprocess(imgs, img_ids, out, name, device)
 		break
 
 if __name__ == '__main__':

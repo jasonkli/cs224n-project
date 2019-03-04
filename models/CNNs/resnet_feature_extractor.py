@@ -21,7 +21,7 @@ class ResNetFeatureExtractor(BaseFeatureExtractor):
 	def __init__(self):
 		super().__init__(extractor, size)
 
-	def extract_features(self, imgs, img_ids, out, name, device):
+	def preprocess(self, imgs, img_ids, out, name, device):
 		outpath = join(out, name)
 		make_clean_path(outpath)
 		combined_imgs = []
@@ -31,8 +31,7 @@ class ResNetFeatureExtractor(BaseFeatureExtractor):
 			combined_imgs.append(img)
 
 		x = torch.stack(combined_imgs)
-		with torch.no_grad():
-			features = self(x.to(device))
+		features = self.extract_features(x, device)
 
 		features = torch.squeeze(torch.squeeze(features, dim=2), dim=2)
 		for i in range(features.size()[0]):

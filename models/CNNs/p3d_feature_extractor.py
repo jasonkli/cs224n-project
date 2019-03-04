@@ -21,7 +21,7 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 	def __init__(self):
 		super().__init__(extractor, size)
 
-	def extract_features(self, imgs, img_ids, out, name, device):
+	def preprocess(self, imgs, img_ids, out, name, device):
 		avg_dir = join(out, 'avg')
 		sample_dir = join(out, 'sample')
 		avg_dir = join(avg_dir, name)
@@ -50,8 +50,7 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 			sequences.append(sequence)
 
 		x = torch.stack(sequences)
-		with torch.no_grad():
-			features = self(x.to(device))
+		features = self.extract_features(x, device)
 
 		for i in range(features.size()[0]):
 			feature = features[i].view(features[i].size()[0], -1).transpose(0, 1)
