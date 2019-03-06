@@ -12,18 +12,18 @@ from os.path import basename, exists, isdir, isfile, join, normpath
 from models import ResNetFeatureExtractor, P3DFeatureExtractor
 from utils import get_input_output_args, make_safe_path
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def main():
 	directory, out =  get_input_output_args()
 	res = False if 'p3d' in out else True
 	make_safe_path(out)
 
-	if not res:
+	"""if not res:
 		avg_dir = join(out, 'avg')
 		sample_dir = join(out, 'sample')
 		make_safe_path(avg_dir)
-		make_safe_path(sample_dir)
+		make_safe_path(sample_dir)"""
 
 	img_dirs = [join(directory, d) for d in listdir(directory) if isdir(join(directory, d))]
 

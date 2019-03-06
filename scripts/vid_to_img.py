@@ -45,8 +45,6 @@ def main():
 	videos =  [join(directory, f) for f in listdir(directory) if isfile(join(directory, f)) and 'avi' in f]
 	frame_count = {}
 	frame_count_exact = {}
-	csv_file = open(join(out, 'frames.csv'), 'w')
-	writer = csv.writer(csv_file)
 
 	for i, video in enumerate(videos):
 		name = basename(normpath(video)).split('.')[0]
@@ -56,16 +54,19 @@ def main():
 
 		count = extract_images(video, outpath)
 
-		writer.writerow([name, count])
 		if count in frame_count:
 			frame_count[count] += 1
 		else:
 			frame_count[count] = 1
 
-	csv_file.close()
 
+	csv_file = open(join(out, 'frames.csv'), 'w')
+	writer = csv.writer(csv_file)
 	for key in sorted(frame_count):
+		writer.writerow([key, frame_count[key]])
 		print(key, frame_count[key])
+
+	csv_file.close()
 
 
 if __name__ == '__main__':

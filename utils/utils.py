@@ -31,3 +31,8 @@ def make_clean_path(path):
 def make_safe_path(path):
 	if not os.path.exists(path):
 		os.mkdir(path)
+
+def custom_collate_fn(batch):
+	data = [elem[0] for elem in batch]
+	target = [elem[1] for elem in batch]
+	return [data, target]

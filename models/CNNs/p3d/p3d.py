@@ -258,15 +258,17 @@ class P3D(nn.Module):
         x = self.maxpool(x)
 
         x = self.maxpool_2(self.layer1(x))  #  Part Res2
-        x = self.layer2(x)
+        x = self.maxpool_2(self.layer2(x))  #  Part Res3
         x = self.layer3(x)
-        #x = self.maxpool_2(self.layer2(x))  #  Part Res3
         #x = self.maxpool_2(self.layer3(x))  #  Part Res4
 
-        """sizes=x.size()
-        x = x.view(-1,sizes[1],sizes[3],sizes[4])  #  Part Res5
+        sizes=x.size()
+        x = x.permute(0, 2, 1, 3, 4).contiguous()
+        x = x.contiguous().view(-1,sizes[1],sizes[3],sizes[4])  #  Part Res5
         x = self.layer4(x)
-        x = self.avgpool(x)
+        x = x.view(sizes[0], sizes[2], x.size()[1], x.size()[2], x.size()[3])
+        x = x.permute(0, 2, 1, 3, 4).contiguous()
+        """x = self.avgpool(x)
 
         x = x.view(-1,self.fc.in_features)
         x = self.fc(self.dropout(x))"""
