@@ -1,8 +1,12 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).absolute().parent))
+
 import torch
 import torch.nn as nn
 import torch.nn.utils
 import torch.nn.functional as F
-from lstm_highway import LSTMHighway 
+from layers.lstm_highway import LSTMHighway 
 
 
 
