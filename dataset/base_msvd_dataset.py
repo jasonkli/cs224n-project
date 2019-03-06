@@ -16,7 +16,6 @@ class BaseMSVDDataset(Dataset):
 		self.df = pd.read_csv(csv_file)
 		self.videos = self.df['VideoID'].tolist()
 		self.targets = self.df['Target'].tolist()
-		self.path = join(directory, 'imgs_pre')
 		self.max_frames = max_frames
 
 	def __len__(self):
