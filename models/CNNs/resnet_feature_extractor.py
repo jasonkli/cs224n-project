@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).absolute().parent.parent))
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -35,5 +36,5 @@ class ResNetFeatureExtractor(BaseFeatureExtractor):
 
 		features = torch.squeeze(torch.squeeze(features, dim=2), dim=2)
 		for i in range(features.size()[0]):
-			torch.save(features[i], join(outpath, '{}.pt'.format(img_ids[i])))
+			np.save(join(outpath, '{}.npy'.format(img_ids[i])), features[i].cpu().numpy())
 

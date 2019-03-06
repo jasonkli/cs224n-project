@@ -1,5 +1,6 @@
 import argparse
 import torch
+import torch.nn as nn
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
@@ -17,7 +18,7 @@ def get_arguments():
 	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=30, help="Max epochs")
 	parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help="Batch size")
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
-	parser.add_argument('--log_iter', dest='log_iter', type=int, default=10)
+	parser.add_argument('--train_iter', dest='train_iter', type=int, default=100)
 	parser.add_argument('--val_iter', dest='val_iter', type=int, default=1000)
 	parser.add_argument('--max_frames', dest='max_frames', type=int, default=96)
 	parser.add_argument('--decay_rate', dest='decay_rate', type=int, default=0.5)
@@ -30,18 +31,22 @@ def train(args):
 	if args.model == 'lstm':
 		dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
-		loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=8, collate_fn=custom_collate_fn)
+		loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device)	
+
+	for param in model.parameters():
+		if len(param.size()) > 1:
+			nn.init.xavier_normal_(param.data)
 
 	if args.sgd:
 		optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 	else:
 		optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-
-	model.to(device)
 	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate)
 
+	model.to(device)
+	print('Starting training...')
 	for epoch in range(args.max_epochs):
 		for data, target in loader:
 			model.train()

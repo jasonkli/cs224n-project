@@ -17,9 +17,9 @@ class LSTMMSVDDataset(BaseMSVDDataset):
 		target = self.targets[index].split()
 
 		vid_path = join(self.path, video)
-		vector_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.pt' in f]
+		vector_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.npy' in f]
 		vector_files = sorted(vector_files, key=lambda x: int(x.split('.')[0]))
-		vectors = [torch.load(join(vid_path, f)).numpy().tolist() for f in vector_files]
+		vectors = [np.load(join(vid_path, f)).tolist() for f in vector_files]
 
 		if len(vectors) > self.max_frames:
 			slice_index = np.random.choice(len(vectors) - self.max_frames + 1)
