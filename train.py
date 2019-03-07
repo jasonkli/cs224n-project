@@ -1,5 +1,6 @@
 import argparse
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import time
 import torch
@@ -11,7 +12,7 @@ from torch.utils.data import DataLoader
 from dataset import LSTMMSVDDataset
 from models import LSTMCombined
 from os.path import join
-from utils import custom_collate_fn
+from utils import custom_collate_fn, make_clean_path
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -52,6 +53,15 @@ def evaluate_ppl(model, val_loader):
 
 	return ppl
 
+def plot(x, y, path, label):
+	plt.plot(x, y)
+	plt.xlabel('Iteration')
+	plt.ylabel(label)
+	plt.savefig(path)
+	plt.cla()
+	plt.clf()
+
+
 def train(args):
 	if args.model == 'lstm':
 		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
@@ -80,10 +90,17 @@ def train(args):
 	iteration = 0
 	patience = 0
 	cum_loss = report_loss = cum_tgt_words = report_tgt_words = cum_examples = report_examples = 0
-	valid_scores = []
-	train_time = begin_time = time.time()
-	save_path = join(args.save_dir, '{}_checkpoint.pth'.format(int(begin_time)))
+	valid_ppls = []
+	train_ppls = []
+	train_losses = []
+	x_axis = []
 	best_ppl = float('inf')
+	train_time = begin_time = time.time()
+
+	path = join(args.save_dir, str(int(begin_time)))
+	make_clean_path(path)
+	save_path = join(path, '{}_checkpoint.pth'.format(int(begin_time)))
+	model.save_arguments(path, str(int(begin_time)), vars(args))
 
 	print('Starting training...')
 	for epoch in range(args.max_epochs):
@@ -126,17 +143,26 @@ def train(args):
 																						 np.exp(cum_loss / cum_tgt_words),
 																						 cum_examples))
 				
-				cum_loss = cum_examples = cum_tgt_words = 0.
 
 				print('Starting validation ...')
-				dev_ppl = evaluate_ppl(model, val_loader) 
-				scheduler.step(dev_ppl)
+				valid_ppl = evaluate_ppl(model, val_loader) 
+				scheduler.step(valid_ppl)
+
+				valid_ppls.append(valid_ppl)
+				train_losses.append(cum_loss)
+				train_ppls.append(np.exp(cum_loss / cum_tgt_words))
+				x_axis.append(iteration)
+
+				plot(x_axis, valid_ppls, join(path, 'valid_ppl.png'), 'Validation Perplexity')
+				plot(x_axis, train_losses, join(path, 'train_loss.png'), 'Train Loss')
+				plot(x_axis, train_ppls, join(path, 'train_ppl.png'), 'Train Perplexity')
 				
-				if dev_ppl < best_ppl:
-					best_ppl = dev_ppl
+				if valid_ppl < best_ppl:
+					best_ppl = valid_ppl
 					torch.save(model.state_dict(), save_path)
 
-				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, dev_ppl, best_ppl))
+				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, valid_ppl, best_ppl))
+				cum_loss = cum_examples = cum_tgt_words = 0.
 
 def main():
 	args = get_arguments()

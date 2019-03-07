@@ -5,8 +5,10 @@ import torch.nn.functional as F
 import json
 
 from collections import namedtuple
+from os.path import join
 
 from Encoders.lstm_encoder import LSTMEncoder
+from Encoders.p3d_encoder import P3DEncder
 from Decoders.lstm_decoder import LSTMDecoder
 from typing import List, Tuple, Dict, Set, Union
 
@@ -191,6 +193,21 @@ class LSTMCombined(nn.Module):
 
         return completed_hypotheses
 
+    def save_arguments(self, outpath, key, args=None):
+        arg_dict = {}
+        arg_dict['file_path'] = self.file_path
+        arg_dict['cnn_feature_size'] = self.cnn_feature_size
+        arg_dict['lstm_input_size'] = self.lstm_input_size
+        arg_dict['hidden_size_encoder'] = self.hidden_size_encoder
+        arg_dict['hidden_size_decoder'] = self.hidden_size_decoder
+        arg_dict['embed_size'] = self.embed_size
+        arg_dict['dropout_rate'] = self.dropout_rate
+        with open(join(outpath, '{}.json'.format(key)), 'w') as f:
+            json.dump(arg_dict, f)
+
+        if args is not None:
+            with open(join(outpath, '{}_args.json'.format(key)), 'w') as f:
+                json.dump(args, f)
 
 
 
