@@ -5,23 +5,23 @@ import torch.nn.functional as F
 import json
 
 from collections import namedtuple
-from typing import List, Tuple, Dict, Set, Union
 
-from lstm_encoder import LSTMEncoder
-from lstm_decoder import LSTMDecoder
+from Encoders.lstm_encoder import LSTMEncoder
+from Decoders.lstm_decoder import LSTMDecoder
+from typing import List, Tuple, Dict, Set, Union
 
 Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 
 class LSTMCombined(nn.Module):
-    def __init__(self, cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, embed_size, frame_pad_token, file_path, device, dropout_rate=0.2):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256,  device='cpu', dropout_rate=0.2):
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
         self.lstm_input_size = lstm_input_size
         self.hidden_size_encoder = hidden_size_encoder
         self.hidden_size_decoder = hidden_size_decoder
         self.embed_size = embed_size
-        self.frame_pad_token = frame_pad_token # should be a list of 0s, size = cnn_feature_size
+        self.frame_pad_token = [0] * cnn_feature_size
         self.vocab = json.load(open(file_path, 'r'))
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
@@ -94,7 +94,7 @@ class LSTMCombined(nn.Module):
         captions_padded = []
         max_len = captions_actual_lengths[0] - 2 # length doesn't include <start> and <end> tokens to be added
         for sent in captions:
-            sent_padded = [self.vocab['<start>']] + [self.vocab[word] for word in sent] + [self.vocab['<end>']] + [self.vocab['<pad>']] * (max_len - len(sent))
+            sent_padded = [self.vocab['<start>']] + [self.vocab.get(word, self.vocab['<unk>']) for word in sent] + [self.vocab['<end>']] + [self.vocab['<pad>']] * (max_len - len(sent))
             captions_padded.append(sent_padded)
         captions_padded_tensor = torch.tensor(captions_padded, dtype=torch.long, device=self.device).permute(1, 0) # shape: (max_sent_length, batch_size)
 

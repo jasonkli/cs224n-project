@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).absolute().parent.parent))
+
 import torch
 import torch.nn as nn
 import torch.nn.utils

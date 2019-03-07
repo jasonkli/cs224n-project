@@ -20,12 +20,14 @@ class P3DMSVDDataset(BaseMSVDDataset):
 		target = self.targets[index].split()
 
 		vid_path = join(self.path, video)
-		data_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.pt' in f]
+		data_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.npy' in f]
 		data_files = sorted(data_files, key=lambda x: int(x.split('.')[0]))
-		data = [torch.load(join(vid_path, f)) for f in vector_files]
 
-		if FRAMES_PER_FILE * len(data) > self.max_frames:
-			slice_index = np.random.choice(len(data) - int(max_frames / FRAMES_PER_FILE) + 1)
-			data = data[slice_index:slice_index+self.max_frames]
+
+		if FRAMES_PER_FILE * len(data_files) > self.max_frames:
+			slice_index = np.random.choice(len(data_files) - int(max_frames / FRAMES_PER_FILE) + 1)
+			data_files = data_files[slice_index:slice_index+int(max_frames / FRAMES_PER_FILE)]
+
+		data = [np.load(join(vid_path, f)).tolist() for f in data_files]
 
 		return data, target

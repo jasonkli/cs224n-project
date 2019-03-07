@@ -19,12 +19,6 @@ def main():
 	res = False if 'p3d' in out else True
 	make_safe_path(out)
 
-	"""if not res:
-		avg_dir = join(out, 'avg')
-		sample_dir = join(out, 'sample')
-		make_safe_path(avg_dir)
-		make_safe_path(sample_dir)"""
-
 	img_dirs = [join(directory, d) for d in listdir(directory) if isdir(join(directory, d))]
 
 	model = ResNetFeatureExtractor() if res else P3DFeatureExtractor()
@@ -37,7 +31,7 @@ def main():
 		imgs = sorted(imgs, key=lambda x: int(basename(normpath(x)).split('.')[0]))
 		img_ids = sorted([int(basename(normpath(img)).split('.')[0]) for img in imgs])
 		model.preprocess(imgs, img_ids, out, name, device)
-		break
+
 
 if __name__ == '__main__':
 	main()
