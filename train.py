@@ -9,7 +9,7 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dataset import LSTMMSVDDataset
+from dataset import LSTMMSVDDataset, P3DMSVDDataset
 from models import LSTMCombined
 from os.path import join
 from utils import custom_collate_fn, make_clean_path
@@ -30,7 +30,7 @@ def get_arguments():
 	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.1)
 	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
 	parser.add_argument('--directory', dest='directory', type=str, default=None)
-	parser.add_argument('--model', dest='model', type=str, choices=['lstm'], default='lstm')
+	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d'], default='lstm')
 	parser.add_argument('--save_dir', dest='save_dir', default='checkpoints/')
 
 	return parser.parse_args()
@@ -73,6 +73,17 @@ def train(args):
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
 
 		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device)	
+	elif args.model == 'p3d':
+		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+					else P3DMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
+
+		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
+
+		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')	
+
 
 	model.to(device)
 	for param in model.parameters():
@@ -149,7 +160,7 @@ def train(args):
 				scheduler.step(valid_ppl)
 
 				valid_ppls.append(valid_ppl)
-				train_losses.append(cum_loss)
+				train_losses.append(cum_loss / cum_examples)
 				train_ppls.append(np.exp(cum_loss / cum_tgt_words))
 				x_axis.append(iteration)
 
