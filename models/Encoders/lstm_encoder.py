@@ -11,7 +11,7 @@ from layers.lstm_highway import LSTMHighway
 
 
 class LSTMEncoder(nn.Module):
-	def __init__(self, cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder):
+	def __init__(self, cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, dropout_rate=0.2):
 		super(LSTMEncoder, self).__init__()
 		self.cnn_feature_size = cnn_feature_size
 		self.lstm_input_size = lstm_input_size
@@ -19,8 +19,7 @@ class LSTMEncoder(nn.Module):
 		self.hidden_size_decoder = hidden_size_decoder
 
 		self.highway_transform = LSTMHighway(cnn_feature_size, lstm_input_size)
-		self.dropout = nn.Dropout(0.2)
-		#self.highway_transform = nn.Linear(cnn_feature_size, lstm_input_size)
+		self.dropout = nn.Dropout(dropout_rate)
 		self.linear_transform_enc_dec_h = nn.Linear(2 * hidden_size_encoder, hidden_size_decoder)
 		self.linear_transform_enc_dec_c = nn.Linear(2 * hidden_size_encoder, hidden_size_decoder)
 		self.two_layer_lstm = nn.LSTM(lstm_input_size, hidden_size_encoder, 2)

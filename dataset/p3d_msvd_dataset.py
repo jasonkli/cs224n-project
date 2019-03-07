@@ -28,6 +28,7 @@ class P3DMSVDDataset(BaseMSVDDataset):
 			slice_index = np.random.choice(len(data_files) - int(max_frames / FRAMES_PER_FILE) + 1)
 			data_files = data_files[slice_index:slice_index+int(max_frames / FRAMES_PER_FILE)]
 
-		data = [np.load(join(vid_path, f)).tolist() for f in data_files]
+		data = np.concatenate([np.load(join(vid_path, f)).tolist() for f in data_files])
+		data = [np.squeeze(elem, axis=0).tolist() for elem in np.vsplit(data, data.shape[0])]
 
 		return data, target
