@@ -3,10 +3,14 @@ import torch.nn as nn
 import torch.nn.utils
 import torch.nn.functional as F
 import json
+
+from collections import namedtuple
+
 from Encoders.lstm_encoder import LSTMEncoder
 from Decoders.lstm_decoder import LSTMDecoder
 from typing import List, Tuple, Dict, Set, Union
 
+Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 
 class LSTMCombined(nn.Module):
@@ -19,6 +23,7 @@ class LSTMCombined(nn.Module):
         self.embed_size = embed_size
         self.frame_pad_token = [0] * cnn_feature_size
         self.vocab = json.load(open(file_path, 'r'))
+        self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
@@ -31,13 +36,12 @@ class LSTMCombined(nn.Module):
     def forward(self, source, captions):
         vids_actual_lengths, vids_padded = self.pad_vid_frames(source) # Both sorted by actual vid length (decsending order)
         enc_hiddens, dec_init_state_1, dec_init_state_2 = self.encoder(vids_padded, vids_actual_lengths)
-        dec_init_state_1 = (torch.unsqueeze(dec_init_state_1[0], 0), torch.unsqueeze(dec_init_state_1[1], 0))
         enc_masks = self.generate_masks(enc_hiddens, vids_actual_lengths)
 
         captions_actual_lengths, captions_padded = self.pad_captions(captions) # captions_padded: (max_sent_length, batch_size)
         captions_padded_exclude_last = captions_padded[:-1]
         captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)  # (max_sent_length - 1, batch_size, embed_size)
-        combined_outputs = self.decoder(enc_hiddens, enc_masks, dec_init_state_1, dec_init_state_2, captions_padded_embedded, [length - 1 for length in captions_actual_lengths])
+        combined_outputs = self.decoder(enc_hiddens, enc_masks, dec_init_state_1, dec_init_state_2, captions_padded_embedded)
         P = F.log_softmax(self.target_vocab_projection(combined_outputs), dim=-1)
         target_masks = (captions_padded != self.vocab['<pad>']).float() # Zero out probabilities for which we have nothing in the captions
         target_words_log_prob = torch.gather(P, index=captions_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:]
@@ -65,7 +69,7 @@ class LSTMCombined(nn.Module):
 
         @param source (List[List[List[float]]): list of videos (frames)
         @returns vids_actual_lengths (List[int]): List of actual lengths for each of the source videos in the batch
-        @returns vids_padded: tensor of (max_vid_length, batch_size, cnn_feature_size)
+        @returns vids_padded_tensor: tensor of (max_vid_length, batch_size, cnn_feature_size)
         """
         source = sorted(source, key=lambda vid: len(vid), reverse=True)
         vids_actual_lengths = [len(vid) for vid in source]
@@ -95,6 +99,97 @@ class LSTMCombined(nn.Module):
         captions_padded_tensor = torch.tensor(captions_padded, dtype=torch.long, device=self.device).permute(1, 0) # shape: (max_sent_length, batch_size)
 
         return captions_actual_lengths, captions_padded_tensor
+
+
+    def beam_search(self, video, beam_size=5, max_decoding_time_step=70) -> List[Hypothesis]:
+        """ Given a single video, perform beam search, yielding captions.
+        @param video (List[List[float]]): a single video (consisting of frame vectors)
+        @param beam_size (int): beam size
+        @param max_decoding_time_step (int): maximum number of time steps to unroll the decoding RNN
+        @returns hypotheses (List[Hypothesis]): a list of hypothesis, each hypothesis has two fields:
+                value: List[str]: the decoded caption, represented as a list of words
+                score: float: the log-likelihood of the caption
+        """
+        video_length_vec, video_tensor = self.pad_vid_frames([video], self.device)
+
+        src_encodings, dec_init_vec_1, dec_init_vec_2  = self.encoder(video_tensor, video_length_vec)
+        src_encodings_att_linear = self.decoder.att_projection(src_encodings)
+
+        h_tm0 = dec_init_vec_1
+        h_tm1 = dec_init_vec_2
+        att_tm1 = torch.zeros(1, self.hidden_size_decoder, device=self.device)
+
+        eos_id = self.vocab['<end>']
+
+        hypotheses = [['<start>']]
+        hyp_scores = torch.zeros(len(hypotheses), dtype=torch.float, device=self.device)
+        completed_hypotheses = []
+
+        t = 0
+        while len(completed_hypotheses) < beam_size and t < max_decoding_time_step:
+            t += 1
+            hyp_num = len(hypotheses)
+
+            exp_src_encodings = src_encodings.expand(hyp_num,
+                                                     src_encodings.size(1),
+                                                     src_encodings.size(2))
+
+            exp_src_encodings_att_linear = src_encodings_att_linear.expand(hyp_num,
+                                                                           src_encodings_att_linear.size(1),
+                                                                           src_encodings_att_linear.size(2))
+
+            y_tm1 = torch.tensor([self.vocab[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
+            y_t_embed = self.to_embeddings(y_tm1)
+
+            (h_t0, cell_t0), (h_t, cell_t), att_t  = self.decoder.step(y_t_embed, att_tm1, h_tm0, h_tm1,
+                                                      exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
+
+            log_p_t = F.log_softmax(self.target_vocab_projection(att_t), dim=-1)
+
+            live_hyp_num = beam_size - len(completed_hypotheses)
+            contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
+            top_cand_hyp_scores, top_cand_hyp_pos = torch.topk(contiuating_hyp_scores, k=live_hyp_num)
+
+            prev_hyp_ids = top_cand_hyp_pos / len(self.vocab)
+            hyp_word_ids = top_cand_hyp_pos % len(self.vocab)
+
+            new_hypotheses = []
+            live_hyp_ids = []
+            new_hyp_scores = []
+
+            for prev_hyp_id, hyp_word_id, cand_new_hyp_score in zip(prev_hyp_ids, hyp_word_ids, top_cand_hyp_scores):
+                prev_hyp_id = prev_hyp_id.item()
+                hyp_word_id = hyp_word_id.item()
+                cand_new_hyp_score = cand_new_hyp_score.item()
+
+                hyp_word = self.vocab_id2word[hyp_word_id]
+                new_hyp_sent = hypotheses[prev_hyp_id] + [hyp_word]
+                if hyp_word == '</s>':
+                    completed_hypotheses.append(Hypothesis(value=new_hyp_sent[1:-1],
+                                                           score=cand_new_hyp_score))
+                else:
+                    new_hypotheses.append(new_hyp_sent)
+                    live_hyp_ids.append(prev_hyp_id)
+                    new_hyp_scores.append(cand_new_hyp_score)
+
+            if len(completed_hypotheses) == beam_size:
+                break
+
+            live_hyp_ids = torch.tensor(live_hyp_ids, dtype=torch.long, device=self.device)
+            h_tm1 = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
+            h_tm0 = (h_t0[live_hyp_ids], cell_t0[live_hyp_ids])
+            att_tm1 = att_t[live_hyp_ids]
+
+            hypotheses = new_hypotheses
+            hyp_scores = torch.tensor(new_hyp_scores, dtype=torch.float, device=self.device)
+
+        if len(completed_hypotheses) == 0:
+            completed_hypotheses.append(Hypothesis(value=hypotheses[0][1:],
+                                                   score=hyp_scores[0].item()))
+
+        completed_hypotheses.sort(key=lambda hyp: hyp.score, reverse=True)
+
+        return completed_hypotheses
 
 
 
