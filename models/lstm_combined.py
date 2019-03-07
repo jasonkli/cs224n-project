@@ -90,7 +90,7 @@ class LSTMCombined(nn.Module):
         captions_padded = []
         max_len = captions_actual_lengths[0] - 2 # length doesn't include <start> and <end> tokens to be added
         for sent in captions:
-            sent_padded = [self.vocab['<start>']] + [self.vocab[word] for word in sent] + [self.vocab['<end>']] + [self.vocab['<pad>']] * (max_len - len(sent))
+            sent_padded = [self.vocab['<start>']] + [self.vocab.get(word, self.vocab['<unk>']) for word in sent] + [self.vocab['<end>']] + [self.vocab['<pad>']] * (max_len - len(sent))
             captions_padded.append(sent_padded)
         captions_padded_tensor = torch.tensor(captions_padded, dtype=torch.long, device=self.device).permute(1, 0) # shape: (max_sent_length, batch_size)
 

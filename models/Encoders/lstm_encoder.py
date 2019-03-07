@@ -19,6 +19,8 @@ class LSTMEncoder(nn.Module):
 		self.hidden_size_decoder = hidden_size_decoder
 
 		self.highway_transform = LSTMHighway(cnn_feature_size, lstm_input_size)
+		self.dropout = nn.Dropout(0.2)
+		#self.highway_transform = nn.Linear(cnn_feature_size, lstm_input_size)
 		self.linear_transform_enc_dec_h = nn.Linear(2 * hidden_size_encoder, hidden_size_decoder)
 		self.linear_transform_enc_dec_c = nn.Linear(2 * hidden_size_encoder, hidden_size_decoder)
 		self.two_layer_lstm = nn.LSTM(lstm_input_size, hidden_size_encoder, 2)
@@ -30,7 +32,7 @@ class LSTMEncoder(nn.Module):
 		@param vids_actual_lengths (List[int]): List of actual lengths for each of the source videos in the batch
 		"""
 
-		lstm_input = self.highway_transform(vids_padded)
+		lstm_input = self.dropout(self.highway_transform(vids_padded))
 		lstm_input = nn.utils.rnn.pack_padded_sequence(lstm_input, vids_actual_lengths)
 		enc_hiddens, (h_n, c_n) = self.two_layer_lstm(lstm_input)
 		enc_hiddens, _ = nn.utils.rnn.pad_packed_sequence(enc_hiddens)
