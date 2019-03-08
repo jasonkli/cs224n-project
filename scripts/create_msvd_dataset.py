@@ -49,8 +49,7 @@ def generate_csv(vid_list, samples, split='train', outpath='../data/msvd'):
 	outfile = join(outpath, '{}.csv'.format(split))
 	out_list = []
 	for vid in vid_list:
-		for sent in samples[vid]:
-			out_list.append([vid, sent])
+		out_list.append([vid, ','.join(samples[vid])])
 	df = pd.DataFrame(out_list, columns=['VideoID', 'Target'])
 	df.to_csv(outfile)
 

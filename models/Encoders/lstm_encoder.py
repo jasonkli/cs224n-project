@@ -8,8 +8,6 @@ import torch.nn.utils
 import torch.nn.functional as F
 from layers.lstm_highway import LSTMHighway 
 
-
-
 class LSTMEncoder(nn.Module):
 	def __init__(self, cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, dropout_rate=0.2):
 		super(LSTMEncoder, self).__init__()

@@ -12,15 +12,6 @@ class LSTMMSVDDataset(BaseMSVDDataset):
 		super().__init__(directory, max_frames, split)
 		self.path = join(directory, 'imgs_pre')
 
-	def __getitem__(self, index):
-		video = self.videos[index]
-		target = self.targets[index].split()
-
-		vid_path = join(self.path, video)
-		vectors = self.get_vectors(vid_path, self.max_frames)
-		
-		return vectors, target
-
 	@staticmethod
 	def get_vectors(vid_path, max_frames):
 		vector_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.npy' in f]

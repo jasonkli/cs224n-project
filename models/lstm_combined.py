@@ -166,7 +166,7 @@ class LSTMCombined(nn.Module):
 
                 hyp_word = self.vocab_id2word[hyp_word_id]
                 new_hyp_sent = hypotheses[prev_hyp_id] + [hyp_word]
-                if hyp_word == '</s>':
+                if hyp_word == '<end>':
                     completed_hypotheses.append(Hypothesis(value=new_hyp_sent[1:-1],
                                                            score=cand_new_hyp_score))
                 else:
