@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.utils
@@ -8,7 +9,7 @@ from collections import namedtuple
 from os.path import join
 
 from Encoders.lstm_encoder import LSTMEncoder
-from Encoders.p3d_encoder import P3DEncder
+from Encoders.p3d_encoder import P3DEncoder
 from Decoders.lstm_decoder import LSTMDecoder
 from typing import List, Tuple, Dict, Set, Union
 
@@ -16,7 +17,7 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 
 class LSTMCombined(nn.Module):
-    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256,  device='cpu', dropout_rate=0.2):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256,  device='cpu', dropout_rate=0.2, encoder='lstm'):
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
         self.lstm_input_size = lstm_input_size
@@ -24,13 +25,18 @@ class LSTMCombined(nn.Module):
         self.hidden_size_decoder = hidden_size_decoder
         self.embed_size = embed_size
         self.frame_pad_token = [0] * cnn_feature_size
-        self.vocab = json.load(open(file_path, 'r'))
+        self.file_path = file_path
+        self.vocab = json.load(open(self.file_path, 'r'))
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
+        self.dropout_rate = dropout_rate
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
-        self.encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder)
-        self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, device)
+        if encoder == 'p3d':
+            self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder, hidden_size_decoder, dropout_rate) 
+        else:
+            self.encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, dropout_rate)
+        self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, device, dropout_rate)
         self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
 
 
@@ -112,7 +118,7 @@ class LSTMCombined(nn.Module):
                 value: List[str]: the decoded caption, represented as a list of words
                 score: float: the log-likelihood of the caption
         """
-        video_length_vec, video_tensor = self.pad_vid_frames([video], self.device)
+        video_length_vec, video_tensor = self.pad_vid_frames([video])
 
         src_encodings, dec_init_vec_1, dec_init_vec_2  = self.encoder(video_tensor, video_length_vec)
         src_encodings_att_linear = self.decoder.att_projection(src_encodings)

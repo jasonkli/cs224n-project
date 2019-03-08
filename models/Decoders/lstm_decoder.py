@@ -39,6 +39,7 @@ class LSTMDecoder(nn.Module):
         dec_state_layer1 = dec_init_state_1
         dec_state_layer2 = dec_init_state_2
         for elem in torch.split(captions_padded_embedded, 1):
+            elem = torch.squeeze(elem, 0)
             dec_state_layer1, dec_state_layer2, o_t = self.step(elem, o_prev, dec_state_layer1, dec_state_layer2, enc_hiddens, enc_hiddens_proj, enc_masks)
             combined_outputs.append(o_t)
             o_prev = o_t
@@ -48,7 +49,6 @@ class LSTMDecoder(nn.Module):
 
 
     def step(self, elem, o_prev, dec_state_layer1, dec_state_layer2, enc_hiddens, enc_hiddens_proj, enc_masks):
-        elem = torch.squeeze(elem, 0)
         dec_state_layer1 = self.layer1_lstm_cell(elem, dec_state_layer1)
         layer1_hidden_bar = torch.cat((dec_state_layer1[0], o_prev), 1)
         dec_state_layer2 = self.layer2_lstm_cell(layer1_hidden_bar, dec_state_layer2)
