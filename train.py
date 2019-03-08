@@ -105,12 +105,13 @@ def train(args):
 	train_ppls = []
 	train_losses = []
 	x_axis = []
-	best_ppl = float('inf')
+	best_val_ppl = best_train_ppl = float('inf')
 	train_time = begin_time = time.time()
 
 	path = join(args.save_dir, str(int(begin_time)))
 	make_clean_path(path)
-	save_path = join(path, '{}_checkpoint.pth'.format(int(begin_time)))
+	save_path1 = join(path, '{}_checkpoint1.pth'.format(int(begin_time)))
+	save_path2 = join(path, '{}_checkpoint2.pth'.format(int(begin_time)))
 	model.save_arguments(path, str(int(begin_time)), vars(args))
 
 	print('Starting training...')
@@ -149,9 +150,11 @@ def train(args):
 				report_loss = report_tgt_words = report_examples = 0.
 
 			if iteration % args.val_iter == 0:
+				train_loss = cum_loss / cum_examples
+				train_ppl = np.exp(cum_loss / cum_tgt_words)
 				print('epoch %d, iter %d, cum. loss %.2f, cum. ppl %.2f cum. examples %d' % (epoch, iteration,
-																						 cum_loss / cum_examples,
-																						 np.exp(cum_loss / cum_tgt_words),
+																						 train_loss,
+																						 train_ppl,
 																						 cum_examples))
 				
 
@@ -160,19 +163,23 @@ def train(args):
 				scheduler.step(valid_ppl)
 
 				valid_ppls.append(valid_ppl)
-				train_losses.append(cum_loss / cum_examples)
-				train_ppls.append(np.exp(cum_loss / cum_tgt_words))
+				train_losses.append(train_loss)
+				train_ppls.append(train_ppl)
 				x_axis.append(iteration)
 
 				plot(x_axis, valid_ppls, join(path, 'valid_ppl.png'), 'Validation Perplexity')
 				plot(x_axis, train_losses, join(path, 'train_loss.png'), 'Train Loss')
 				plot(x_axis, train_ppls, join(path, 'train_ppl.png'), 'Train Perplexity')
 				
-				if valid_ppl < best_ppl:
-					best_ppl = valid_ppl
-					torch.save(model.state_dict(), save_path)
+				if valid_ppl < best_val_ppl:
+					best_val_ppl = valid_ppl
+					torch.save(model.state_dict(), save_path1)
 
-				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, valid_ppl, best_ppl))
+				if train_ppl < best_train_ppl:
+					best_train_ppl = train_ppl
+					torch.save(model.state_dict(), save_path2)
+
+				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, valid_ppl, best_val_ppl))
 				cum_loss = cum_examples = cum_tgt_words = 0.
 
 def main():
