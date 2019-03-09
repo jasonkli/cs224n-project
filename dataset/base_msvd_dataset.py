@@ -22,4 +22,14 @@ class BaseMSVDDataset(Dataset):
 		return len(self.targets)
 
 	def __getitem__(self, index):
+		video = self.videos[index]
+		target = np.random.choice(self.targets[index].split(',')).split()
+
+		vid_path = join(self.path, video)
+		vectors = self.get_vectors(vid_path, self.max_frames)
+		
+		return vectors, target
+
+	@staticmethod
+	def get_vectors(vid_path, max_frames):
 		raise NotImplementedError

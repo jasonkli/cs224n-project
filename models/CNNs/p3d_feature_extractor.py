@@ -45,5 +45,5 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 		features = self.extract_features(x, device)
 		for i in range(features.size()[0]):
 			feature = features[i].view(features[i].size()[0], -1).transpose(0, 1)
-			np.save(join(outpath, '{}.npy'.format(img_ids[start + i * NUM_FRAMES])), features.cpu().numpy())
+			np.save(join(outpath, '{}.npy'.format(img_ids[start + i * NUM_FRAMES])), feature.cpu().numpy())
 
