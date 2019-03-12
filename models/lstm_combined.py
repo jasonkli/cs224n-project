@@ -18,7 +18,8 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 class LSTMCombined(nn.Module):
 
-    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256, att_projection_dim=256, num_decoder_layers=1, device='cpu', dropout_rate=0.2, encoder='lstm'):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, 
+                    embed_size=64, att_projection_dim=256, num_layers=1, device='cpu', dropout_rate=0.3, encoder='lstm'):
 
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
@@ -27,23 +28,23 @@ class LSTMCombined(nn.Module):
         self.hidden_size_decoder = hidden_size_decoder
         self.embed_size = embed_size
         self.att_projection_dim = att_projection_dim
-        self.num_decoder_layers = num_decoder_layers
+        self.num_layers = num_layers
         self.frame_pad_token = [0] * cnn_feature_size
         self.file_path = file_path
         self.vocab = json.load(open(self.file_path, 'r'))
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
         self.dropout_rate = dropout_rate
-        self.dropout = nn.Dropout(dropout_rate)
+        self.dropout = nn.Dropout(0.5)
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
         if encoder == 'p3d':
-            self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder , hidden_size_decoder, dropout_rate) 
-            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_decoder_layers, device, dropout_rate)
+            self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder , hidden_size_decoder, num_layers, dropout_rate) 
+            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_layers, device, dropout_rate)
             self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
         else:
-            self.encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, num_decoder_layers, dropout_rate)
-            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_decoder_layers, device, dropout_rate)
+            self.encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, num_layers, dropout_rate)
+            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_layers, device, dropout_rate)
             self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
 
 
@@ -199,7 +200,7 @@ class LSTMCombined(nn.Module):
             live_hyp_ids = torch.tensor(live_hyp_ids, dtype=torch.long, device=self.device)
 
             h_tm0 = (h_t0[live_hyp_ids], cell_t0[live_hyp_ids])
-            if self.num_decoder_layers == 1:
+            if self.num_layers == 1:
                 h_prev_dec = h_t0[live_hyp_ids]
                 h_tm1 = None
             else:
