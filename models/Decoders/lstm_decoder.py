@@ -9,12 +9,13 @@ import torch.nn.functional as F
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self, embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, device, dropout_rate=0.2):
+    def __init__(self, embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_decoder_layers, device, dropout_rate=0.2):
         super(LSTMDecoder, self).__init__()
         self.embed_size = embed_size
         self.hidden_size_encoder = hidden_size_encoder
         self.hidden_size_decoder = hidden_size_decoder
         self.att_projection_dim = att_projection_dim
+        self.num_decoder_layers = num_decoder_layers
         self.device = device
 
         self.layer1_lstm_cell = nn.LSTMCell(embed_size + hidden_size_encoder, hidden_size_decoder)
@@ -46,7 +47,10 @@ class LSTMDecoder(nn.Module):
             dec_state_layer1, dec_state_layer2, output_t = self.step(elem, h_prev_dec, dec_state_layer1, 
                 dec_state_layer2, enc_hiddens, enc_hiddens_proj, enc_masks)
             outputs.append(output_t)
-            h_prev_dec = dec_state_layer2[0]
+            if self.num_decoder_layers == 1:
+                h_prev_dec = dec_state_layer1[0]
+            else:
+                h_prev_dec = dec_state_layer2[0]
         outputs = torch.stack(outputs, 0)
 
         return outputs
@@ -67,9 +71,13 @@ class LSTMDecoder(nn.Module):
 
         lstm_input = torch.cat((elem, a_t), 1) # shape (batch_size, embed_size + hidden_size_encoder)
         h, c = self.layer1_lstm_cell(lstm_input, dec_state_layer1)
-        h_out, c_out = self.layer2_lstm_cell(h, dec_state_layer2)
-        output_t = self.dropout(torch.tanh(self.linear_transform(h_out)))
-        return (h, c), (h_out, c_out), output_t
+        if self.num_decoder_layers == 1:
+            output_t = self.dropout(torch.tanh(self.linear_transform(h)))
+            return (h, c), None, output_t
+        else:
+            h_out, c_out = self.layer2_lstm_cell(h, dec_state_layer2)
+            output_t = self.dropout(torch.tanh(self.linear_transform(h)))
+            return (h, c), (h_out, c_out), output_t
         
             
     
