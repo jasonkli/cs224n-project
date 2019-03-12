@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 from dataset import LSTMMSVDDataset, P3DMSVDDataset
 from models import LSTMCombined
+from models.lstm_no_att import LSTMBasic
 from os.path import join
 from utils import custom_collate_fn, make_clean_path
 
@@ -18,19 +19,19 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def get_arguments():
 	parser = argparse.ArgumentParser(description="Train arguements")
-	parser.add_argument('--lr', dest='lr', type=float, default=1e-3, help='Learning rate')
+	parser.add_argument('--lr', dest='lr', type=float, default=1e-4, help='Learning rate')
 	parser.add_argument('--clip', dest='clip', type=float, default=5.0, help='Clip gradient')
-	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=30, help="Max epochs")
-	parser.add_argument('--batch_size', dest='batch_size', type=int, default=128, help="Batch size")
+	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=1200, help="Max epochs")
+	parser.add_argument('--batch_size', dest='batch_size', type=int, default=256, help="Batch size")
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
 	parser.add_argument('--train_iter', dest='train_iter', type=int, default=10)
-	parser.add_argument('--val_iter', dest='val_iter', type=int, default=1000)
-	parser.add_argument('--max_frames', dest='max_frames', type=int, default=96)
-	parser.add_argument('--patience', dest='patience', type=int, default=4)
-	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.1)
-	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
+	parser.add_argument('--val_iter', dest='val_iter', type=int, default=500)
+	parser.add_argument('--max_frames', dest='max_frames', type=int, default=64)
+	parser.add_argument('--patience', dest='patience', type=int, default=5)
+	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.5)
+	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-6)
 	parser.add_argument('--directory', dest='directory', type=str, default=None)
-	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d'], default='lstm')
+	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic'], default='lstm')
 	parser.add_argument('--save_dir', dest='save_dir', default='checkpoints/')
 
 	return parser.parse_args()
@@ -82,20 +83,30 @@ def train(args):
 					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
 
-		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')	
+		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')
+	elif args.model == 'basic':
+		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
+
+		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
+
+		model = LSTMBasic('data/msvd/msvd_vocab.json', device=device)
 
 
 	model.to(device)
 	for param in model.parameters():
-		if len(param.size()) > 1:
-			nn.init.xavier_normal_(param.data)
+		param.data.uniform_(-0.1,0.1)
 
 	if args.sgd:
 		optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
 	else:
 		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
+	#scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
+	scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=args.decay_rate)
 
 
 	iteration = 0
@@ -160,7 +171,8 @@ def train(args):
 
 				print('Starting validation ...')
 				valid_ppl = evaluate_ppl(model, val_loader) 
-				scheduler.step(valid_ppl)
+				#scheduler.step(train_ppl)
+				#scheduler.step()
 
 				valid_ppls.append(valid_ppl)
 				train_losses.append(train_loss)
@@ -181,6 +193,7 @@ def train(args):
 
 				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, valid_ppl, best_val_ppl))
 				cum_loss = cum_examples = cum_tgt_words = 0.
+		scheduler.step()
 
 def main():
 	args = get_arguments()

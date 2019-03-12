@@ -30,6 +30,7 @@ class LSTMEncoder(nn.Module):
 		"""
 
 		lstm_input = self.dropout(self.highway_transform(vids_padded))
+		#lstm_input = vids_padded
 		lstm_input = nn.utils.rnn.pack_padded_sequence(lstm_input, vids_actual_lengths)
 		enc_hiddens, (h_n, c_n) = self.two_layer_lstm(lstm_input)
 		enc_hiddens, _ = nn.utils.rnn.pad_packed_sequence(enc_hiddens)

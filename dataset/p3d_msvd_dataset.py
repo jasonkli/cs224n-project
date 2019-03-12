@@ -15,6 +15,7 @@ class P3DMSVDDataset(BaseMSVDDataset):
 		super().__init__(directory, max_frames, split)
 		self.path = join(directory, 'p3d_pre')
 
+	@staticmethod
 	def get_vectors(vid_path, max_frames):
 		vector_files = [f for f in listdir(vid_path) if isfile(join(vid_path, f)) and '.npy' in f]
 		vector_files = sorted(vector_files, key=lambda x: int(x.split('.')[0]))

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.utils
 import torch.nn.functional as F
-from lstm_highway_no_att import LSTMHighway 
+from .lstm_highway_no_att import LSTMHighway 
 
 
 
@@ -25,10 +25,13 @@ class LSTMEncoder(nn.Module):
 		@param vids_padded: (max_vid_length, batch_size, cnn_feature_size)
 		@param vids_actual_lengths (List[int]): List of actual lengths for each of the source videos in the batch
 		"""
-
+		#print("start")
+		#print(vids_padded[:,0,:], vids_padded[:,1,:], vids_padded[:,2,:])
 		lstm_input = self.highway_transform(vids_padded)
 		lstm_input = nn.utils.rnn.pack_padded_sequence(lstm_input, vids_actual_lengths)
 		enc_hiddens, (h_n, c_n) = self.two_layer_lstm(lstm_input)
+		#print("hidden")
+		#print(h_n[:,0,:], h_n[:,1,:], h_n[:,2,:])
 		enc_hiddens, _ = nn.utils.rnn.pad_packed_sequence(enc_hiddens)
 		enc_hiddens = enc_hiddens.permute(1, 0, 2) # shape (batch_size, max_vid_length, hidden_size_encoder)
 		h_n = torch.cat((h_n[0], h_n[1]), 1)

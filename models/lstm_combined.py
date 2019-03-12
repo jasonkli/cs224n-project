@@ -17,7 +17,7 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 
 class LSTMCombined(nn.Module):
-    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256,  device='cpu', dropout_rate=0.2, encoder='lstm'):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256,  device='cpu', dropout_rate=0.0, encoder='lstm'):
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
         self.lstm_input_size = lstm_input_size
@@ -30,14 +30,17 @@ class LSTMCombined(nn.Module):
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
         self.dropout_rate = dropout_rate
+        self.dropout = nn.Dropout(dropout_rate)
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
         if encoder == 'p3d':
-            self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder, hidden_size_decoder, dropout_rate) 
+            self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder , hidden_size_decoder, dropout_rate) 
+            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, device, dropout_rate)
+            self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
         else:
             self.encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, dropout_rate)
-        self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, device, dropout_rate)
-        self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
+            self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, device, dropout_rate)
+            self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
 
 
 
@@ -49,6 +52,7 @@ class LSTMCombined(nn.Module):
         captions_actual_lengths, captions_padded = self.pad_captions(captions) # captions_padded: (max_sent_length, batch_size)
         captions_padded_exclude_last = captions_padded[:-1]
         captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)  # (max_sent_length - 1, batch_size, embed_size)
+        captions_padded_embedded = self.dropout(captions_padded_embedded)
         combined_outputs = self.decoder(enc_hiddens, enc_masks, dec_init_state_1, dec_init_state_2, captions_padded_embedded)
         P = F.log_softmax(self.target_vocab_projection(combined_outputs), dim=-1)
         target_masks = (captions_padded != self.vocab['<pad>']).float() # Zero out probabilities for which we have nothing in the captions
