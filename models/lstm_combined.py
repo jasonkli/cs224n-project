@@ -18,7 +18,7 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 class LSTMCombined(nn.Module):
 
-    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256, att_projection_dim=256, device='cpu', dropout_rate=0.2, encoder='lstm'):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, embed_size=256, att_projection_dim=256, device='cpu', dropout_rate=0.3, encoder='lstm'):
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
         self.lstm_input_size = lstm_input_size
@@ -193,9 +193,10 @@ class LSTMCombined(nn.Module):
                 break
 
             live_hyp_ids = torch.tensor(live_hyp_ids, dtype=torch.long, device=self.device)
+            h_prev_dec = h_t[live_hyp_ids]
             h_tm1 = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
             h_tm0 = (h_t0[live_hyp_ids], cell_t0[live_hyp_ids])
-            h_prev_dec = h_t[0][live_hyp_ids]
+
 
             hypotheses = new_hypotheses
             hyp_scores = torch.tensor(new_hyp_scores, dtype=torch.float, device=self.device)

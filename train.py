@@ -25,7 +25,7 @@ def get_arguments():
 	parser.add_argument('--batch_size', dest='batch_size', type=int, default=256, help="Batch size")
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
 	parser.add_argument('--train_iter', dest='train_iter', type=int, default=10)
-	parser.add_argument('--val_iter', dest='val_iter', type=int, default=500)
+	parser.add_argument('--val_iter', dest='val_iter', type=int, default=200)
 	parser.add_argument('--max_frames', dest='max_frames', type=int, default=64)
 	parser.add_argument('--patience', dest='patience', type=int, default=5)
 	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.5)

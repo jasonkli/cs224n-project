@@ -79,7 +79,7 @@ def decode(model, videos, references, vid_path, outfile):
 
 	top_hypotheses = [hyps[0] for hyps in hypotheses]
 	bleu_score = compute_corpus_level_bleu_score(references, top_hypotheses)
-	print('Corpus BLEU: {}'.format(bleu_score * 100))
+	
 
 	count = 0
 	with open(outfile, 'w') as f:
@@ -88,14 +88,14 @@ def decode(model, videos, references, vid_path, outfile):
 			count += 1
 			top_hyp = hyps[0]
 			hyp_sent = ' '.join(top_hyp.value)
-			print(hyp_sent)
+			print(hyp_sent, refs)
 			hyp_sent = hyp_sent.replace('<end>', '')
 			all_refs = ', '.join([' '.join(ref) for ref in refs])
 			try:
 				f.write(hyp_sent + '\t' + all_refs  + '\n')
 			except:
 				continue
-
+	print('Corpus BLEU: {}'.format(bleu_score * 100))
 	print(count)
 
 
