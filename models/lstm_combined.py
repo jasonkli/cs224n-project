@@ -156,12 +156,12 @@ class LSTMCombined(nn.Module):
             y_tm1 = torch.tensor([self.vocab[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
             y_t_embed = self.to_embeddings(y_tm1)
 
-            (h_t0, cell_t0), (h_t, cell_t), h_prev_dec_next, att_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
+            (h_t0, cell_t0), (h_t, cell_t), output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
                 exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)         
             #(h_t0, cell_t0), (h_t, cell_t), att_t  = self.decoder.step(y_t_embed, att_tm1, h_tm0, h_tm1,
                                                       #exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
 
-            log_p_t = F.log_softmax(self.target_vocab_projection(att_t), dim=-1)
+            log_p_t = F.log_softmax(self.target_vocab_projection(output_t), dim=-1)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
             contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
@@ -195,7 +195,7 @@ class LSTMCombined(nn.Module):
             live_hyp_ids = torch.tensor(live_hyp_ids, dtype=torch.long, device=self.device)
             h_tm1 = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
             h_tm0 = (h_t0[live_hyp_ids], cell_t0[live_hyp_ids])
-            h_prev_dec = h_prev_dec_next[live_hyp_ids]
+            h_prev_dec = h_t[0][live_hyp_ids]
 
             hypotheses = new_hypotheses
             hyp_scores = torch.tensor(new_hyp_scores, dtype=torch.float, device=self.device)

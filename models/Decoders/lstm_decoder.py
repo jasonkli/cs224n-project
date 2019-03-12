@@ -43,10 +43,10 @@ class LSTMDecoder(nn.Module):
         dec_state_layer2 = dec_init_state_2
         for elem in torch.split(captions_padded_embedded, 1): 
             elem = torch.squeeze(elem, 0)  # elem shape (batch_size, embed_size)
-            dec_state_layer1, dec_state_layer2, h_prev_dec_next, output_t = self.step(elem, h_prev_dec, dec_state_layer1, 
+            dec_state_layer1, dec_state_layer2, output_t = self.step(elem, h_prev_dec, dec_state_layer1, 
                 dec_state_layer2, enc_hiddens, enc_hiddens_proj, enc_masks)
             outputs.append(output_t)
-            h_prev_dec = h_prev_dec_next
+            h_prev_dec = dec_state_layer2[0]
         outputs = torch.stack(outputs, 0)
 
         return outputs
@@ -69,7 +69,7 @@ class LSTMDecoder(nn.Module):
         h, c = self.layer1_lstm_cell(lstm_input, dec_state_layer1)
         h_out, c_out = self.layer2_lstm_cell(h, dec_state_layer2)
         output_t = self.dropout(torch.tanh(self.linear_transform(h_out)))
-        return dec_state_layer1, dec_state_layer2, h_out, output_t
+        return (h, c), (h_out, c_out), output_t
         
             
     
