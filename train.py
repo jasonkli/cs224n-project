@@ -20,23 +20,24 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 def get_arguments():
 	parser = argparse.ArgumentParser(description="Train arguements")
 	parser.add_argument('--lr', dest='lr', type=float, default=1e-4, help='Learning rate')
-	parser.add_argument('--clip', dest='clip', type=float, default=5.0, help='Clip gradient')
-	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=1200, help="Max epochs")
+	parser.add_argument('--clip', dest='clip', type=float, default=3.0, help='Clip gradient')
+	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=3000, help="Max epochs")
 	parser.add_argument('--batch_size', dest='batch_size', type=int, default=256, help="Batch size")
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
-	parser.add_argument('--train_iter', dest='train_iter', type=int, default=10)
-	parser.add_argument('--val_iter', dest='val_iter', type=int, default=200)
+	parser.add_argument('--train_iter', dest='train_iter', type=int, default=200)
+	parser.add_argument('--val_iter', dest='val_iter', type=int, default=2000)
 	parser.add_argument('--max_frames', dest='max_frames', type=int, default=64)
 	parser.add_argument('--patience', dest='patience', type=int, default=5)
-	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.5)
-	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-6)
+	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.3)
+	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
+	parser.add_argument('--gamma', dest='gamma', type=float, default=5.0)
 	parser.add_argument('--directory', dest='directory', type=str, default=None)
 	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic'], default='lstm')
 	parser.add_argument('--save_dir', dest='save_dir', default='checkpoints/')
 
 	return parser.parse_args()
 
-def evaluate_ppl(model, val_loader):
+def evaluate_ppl(model, val_loader, gamma):
 	model.eval()
 
 	cum_loss = 0.
@@ -44,9 +45,12 @@ def evaluate_ppl(model, val_loader):
 
 	with torch.no_grad():
 		for data, target in val_loader:
-			loss = -model.forward(data, target).sum()
+			#loss = -model.forward(data, target).sum()
+			losses, probs, log_probs = model.forward(data, target) #removed negative sign!
+			#ind_loss = (-1 * torch.pow(1-probs, gamma) * log_probs)
+			#batch_loss = ind_loss.sum(dim=0).sum()
 
-			cum_loss += loss.item()
+			cum_loss += -losses.sum().item()
 			num_words = sum([len(s[1:]) for s in target])  # omitting leading `<s>`
 			cum_words += num_words
 
@@ -105,8 +109,8 @@ def train(args):
 	else:
 		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-	#scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
-	scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=args.decay_rate)
+	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
+	#scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=args.decay_rate)
 
 
 	iteration = 0
@@ -131,14 +135,19 @@ def train(args):
 			iteration += 1
 			model.train()
 			optimizer.zero_grad()
-			losses = -model.forward(data, target)
-			batch_loss = losses.sum()
-			loss = batch_loss / args.batch_size
+			losses, probs, log_probs = model.forward(data, target) #removed negative sign!
+			ind_loss = -1 * torch.pow(1-probs, args.gamma) * log_probs
+			batch_loss = -losses.sum()
+			ind_loss_batch = ind_loss.sum(dim=0).sum()
+			loss = ind_loss_batch / args.batch_size
+			#batch_loss = losses.sum()
+			#loss = batch_loss / args.batch_size
+
 			loss.backward()
 			nn.utils.clip_grad_norm_(model.parameters(), args.clip)
 			optimizer.step()
 
-			batch_losses_val = batch_loss.item()
+			batch_losses_val = ind_loss_batch.item()
 			report_loss += batch_losses_val
 			cum_loss += batch_losses_val
 
@@ -170,9 +179,8 @@ def train(args):
 				
 
 				print('Starting validation ...')
-				valid_ppl = evaluate_ppl(model, val_loader) 
-				#scheduler.step(train_ppl)
-				#scheduler.step()
+				valid_ppl = evaluate_ppl(model, val_loader, args.gamma) 
+				scheduler.step(train_ppl)
 
 				valid_ppls.append(valid_ppl)
 				train_losses.append(train_loss)
@@ -193,7 +201,7 @@ def train(args):
 
 				print('Validation: iter %d, dev. ppl %f, best ppl %f' % (iteration, valid_ppl, best_val_ppl))
 				cum_loss = cum_examples = cum_tgt_words = 0.
-		scheduler.step()
+		#scheduler.step()
 
 def main():
 	args = get_arguments()

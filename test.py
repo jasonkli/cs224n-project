@@ -88,9 +88,11 @@ def decode(model, videos, references, vid_path, outfile):
 			count += 1
 			top_hyp = hyps[0]
 			hyp_sent = ' '.join(top_hyp.value)
-			print(hyp_sent, refs)
+			print(hyp_sent)
 			hyp_sent = hyp_sent.replace('<end>', '')
 			all_refs = ', '.join([' '.join(ref) for ref in refs])
+			all_hyps = [' '.join(h.value) for h in hyps]
+			#print(refs, all_hyps)
 			try:
 				f.write(hyp_sent + '\t' + all_refs  + '\n')
 			except:
@@ -99,7 +101,7 @@ def decode(model, videos, references, vid_path, outfile):
 	print(count)
 
 
-def beam_search(model, videos, vid_path, beam_size=20, max_decoding_time_step=10, max_frames=64):
+def beam_search(model, videos, vid_path, beam_size=10, max_decoding_time_step=20, max_frames=64):
 	""" Run beam search to construct hypotheses for a list of src-language sentences.
 	@param model (NMT): NMT Model
 	@param test_data_src (List[List[str]]): List of sentences (words) in source language, from test set.

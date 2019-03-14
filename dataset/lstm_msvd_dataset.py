@@ -20,9 +20,8 @@ class LSTMMSVDDataset(BaseMSVDDataset):
 		if len(vector_files) > max_frames:
 			slice_index = np.random.choice(len(vector_files) - max_frames + 1)
 			vector_files = vector_files[slice_index:slice_index + max_frames]
-
 		vectors = [np.load(join(vid_path, f)).tolist() for f in vector_files]
-		#vectors = [[0] * 2048 for f in vector_files]
+		#vectors = [[np.random.uniform(-2, 2) for _ in range(2048)] for f in vector_files]
 		return vectors
 
 

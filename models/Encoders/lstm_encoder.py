@@ -50,6 +50,6 @@ class LSTMEncoder(nn.Module):
 		else:
 			h_n_layer2 = self.linear_transform_enc_dec_h(h_n)
 			c_n_layer2 = self.linear_transform_enc_dec_c(c_n)
-			return enc_hiddens, (h_n_layer1, c_n_layer1), (h_n_layer2, c_n_layer2)
+			return enc_hiddens, (h_n_layer1, c_n_layer1), None
 
 

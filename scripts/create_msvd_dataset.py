@@ -31,8 +31,8 @@ def get_counts(train, samples):
 			add_counts(words, word_counts)
 	return word_counts
 
-def get_splits(videos, val_size=100, test_size=669):
-	num_vids = len(videos)
+def get_splits(videos, train_size=1200, val_size=100, test_size=669):
+	"""num_vids = len(videos)
 	indices = range(num_vids)
 	test_indices = random.sample(indices, test_size)
 	remaining = list(set(indices) - set(test_indices))
@@ -40,7 +40,10 @@ def get_splits(videos, val_size=100, test_size=669):
 	train_indices = list(set(remaining) - set(val_indices))
 	train = [videos[i] for i in range(num_vids) if i in train_indices]
 	val = [videos[i] for i in range(num_vids) if i in val_indices]
-	test = [videos[i] for i in range(num_vids) if i in test_indices]
+	test = [videos[i] for i in range(num_vids) if i in test_indices]"""
+	train = videos[:train_size]
+	val = videos[train_size:train_size+val_size]
+	test = videos[train_size+val_size:]
 
 	return train, val, test
 
@@ -49,10 +52,13 @@ def generate_csv(vid_list, samples, split='train', outpath='../data/msvd'):
 	outfile = join(outpath, '{}.csv'.format(split))
 	out_list = []
 	for vid in vid_list:
-		if split != 'train':
-			out_list.append([vid, ','.join(samples[vid])])
+		captions = list(samples[vid])
+		if split == 'train' or split ==  'val':
+			for cap in sorted(captions, key=lambda x: len(x), reverse=True)[5:10]:
+				out_list.append([vid, cap])
 		else:
-			out_list.append([vid, random.choice(samples[vid])])
+			out_list.append([vid, ','.join(captions)])
+		#out_list.append([vid, random.choice(samples[vid])])
 	df = pd.DataFrame(out_list, columns=['VideoID', 'Target'])
 	df.to_csv(outfile)
 
@@ -83,10 +89,10 @@ def main():
 		if video not in valid:
 			continue
 		if video not in samples:
-			samples[video] = []
+			samples[video] = set()
 
 		words = process_sentence(row[3])
-		samples[video].append(' '.join(words))
+		samples[video].add(' '.join(words))
 
 	videos = list(samples.keys())
 	train, val, test = get_splits(videos)
@@ -94,7 +100,9 @@ def main():
 	word_counts = get_counts(train, samples)
 	create_json(list(word_counts.keys()))
 	generate_csv(train, samples, 'train')
+	generate_csv(train, samples, 'train_eval')
 	generate_csv(val, samples, 'val')
+	generate_csv(val, samples, 'val_eval')
 	generate_csv(test, samples, 'test')
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ import json
 
 from collections import namedtuple
 from os.path import join
+from torch.autograd import Variable
 
 from Encoders.lstm_encoder import LSTMEncoder
 from Encoders.p3d_encoder import P3DEncoder
@@ -18,8 +19,8 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 class LSTMCombined(nn.Module):
 
-    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=512, hidden_size_decoder=512, 
-                    embed_size=64, att_projection_dim=256, num_layers=1, device='cpu', dropout_rate=0.3, encoder='lstm'):
+    def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=1024, hidden_size_decoder=1024, 
+                    embed_size=128, att_projection_dim=1024, num_layers=2, device='cpu', dropout_rate=0.3, encoder='lstm'):
 
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
@@ -35,7 +36,7 @@ class LSTMCombined(nn.Module):
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
         self.dropout_rate = dropout_rate
-        self.dropout = nn.Dropout(0.5)
+        #self.dropout = nn.Dropout(0.5)
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
         if encoder == 'p3d':
@@ -55,7 +56,7 @@ class LSTMCombined(nn.Module):
         captions_actual_lengths, captions_padded = self.pad_captions(captions) # captions_padded: (max_sent_length, batch_size)
         captions_padded_exclude_last = captions_padded[:-1]
         captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)  # (max_sent_length - 1, batch_size, embed_size)
-        captions_padded_embedded = self.dropout(captions_padded_embedded)
+        captions_padded_embedded = captions_padded_embedded # Removed dropout
 
         enc_hiddens, dec_init_state_1, dec_init_state_2 = self.encoder(vids_padded, vids_actual_lengths)
         enc_masks = self.generate_masks(enc_hiddens, vids_actual_lengths)
@@ -64,8 +65,9 @@ class LSTMCombined(nn.Module):
         P = F.log_softmax(self.target_vocab_projection(outputs), dim=-1)
         target_masks = (captions_padded != self.vocab['<pad>']).float() # Zero out probabilities for which we have nothing in the captions
         target_words_log_prob = torch.gather(P, index=captions_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:]
+        prob = Variable(target_words_log_prob.data.exp())
         scores = target_words_log_prob.sum(dim=0)
-        return scores
+        return scores, prob, target_words_log_prob
 
 
     def generate_masks(self, enc_hiddens, source_lengths) -> torch.Tensor:
@@ -120,7 +122,7 @@ class LSTMCombined(nn.Module):
         return captions_actual_lengths, captions_padded_tensor
 
 
-    def beam_search(self, video, beam_size=5, max_decoding_time_step=70) -> List[Hypothesis]:
+    def beam_search(self, video, beam_size=10, max_decoding_time_step=70) -> List[Hypothesis]:
         """ Given a single video, perform beam search, yielding captions.
         @param video (List[List[float]]): a single video (consisting of frame vectors)
         @param beam_size (int): beam size
@@ -161,11 +163,13 @@ class LSTMCombined(nn.Module):
             y_tm1 = torch.tensor([self.vocab[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
             y_t_embed = self.to_embeddings(y_tm1)
 
-            (h_t0, cell_t0), (h_t, cell_t), output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
+            dec_state_1, dec_state_2, output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
                 exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)         
             #(h_t0, cell_t0), (h_t, cell_t), att_t  = self.decoder.step(y_t_embed, att_tm1, h_tm0, h_tm1,
                                                       #exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
-
+            (h_t0, cell_t0) = dec_state_1
+            if self.num_layers > 1:
+                (h_t, cell_t) = dec_state_1
             log_p_t = F.log_softmax(self.target_vocab_projection(output_t), dim=-1)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
@@ -227,6 +231,8 @@ class LSTMCombined(nn.Module):
         arg_dict['hidden_size_decoder'] = self.hidden_size_decoder
         arg_dict['embed_size'] = self.embed_size
         arg_dict['dropout_rate'] = self.dropout_rate
+        arg_dict['num_layers'] = self.num_layers
+        
         with open(join(outpath, '{}.json'.format(key)), 'w') as f:
             json.dump(arg_dict, f)
 
