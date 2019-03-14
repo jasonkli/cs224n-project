@@ -32,7 +32,8 @@ def get_test_data(test_file):
 	for i, vid in enumerate(videos):
 		if vid not in vid_to_references:
 			vid_to_references[vid] = []
-		vid_to_references[vid].append(targets[i].split())
+		for target in targets[i].split(','):
+			vid_to_references[vid].append(target.split())
 
 	videos = []
 	references = []
@@ -78,7 +79,7 @@ def decode(model, videos, references, vid_path, outfile):
 
 	top_hypotheses = [hyps[0] for hyps in hypotheses]
 	bleu_score = compute_corpus_level_bleu_score(references, top_hypotheses)
-	print('Corpus BLEU: {}'.format(bleu_score * 100))
+	
 
 	count = 0
 	with open(outfile, 'w') as f:
@@ -87,17 +88,18 @@ def decode(model, videos, references, vid_path, outfile):
 			count += 1
 			top_hyp = hyps[0]
 			hyp_sent = ' '.join(top_hyp.value)
+			print(hyp_sent, refs)
 			hyp_sent = hyp_sent.replace('<end>', '')
 			all_refs = ', '.join([' '.join(ref) for ref in refs])
 			try:
 				f.write(hyp_sent + '\t' + all_refs  + '\n')
 			except:
 				continue
-
+	print('Corpus BLEU: {}'.format(bleu_score * 100))
 	print(count)
 
 
-def beam_search(model, videos, vid_path, beam_size=5, max_decoding_time_step=15, max_frames=64):
+def beam_search(model, videos, vid_path, beam_size=20, max_decoding_time_step=10, max_frames=64):
 	""" Run beam search to construct hypotheses for a list of src-language sentences.
 	@param model (NMT): NMT Model
 	@param test_data_src (List[List[str]]): List of sentences (words) in source language, from test set.

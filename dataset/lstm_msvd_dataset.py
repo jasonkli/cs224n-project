@@ -22,6 +22,7 @@ class LSTMMSVDDataset(BaseMSVDDataset):
 			vector_files = vector_files[slice_index:slice_index + max_frames]
 
 		vectors = [np.load(join(vid_path, f)).tolist() for f in vector_files]
+		#vectors = [[0] * 2048 for f in vector_files]
 		return vectors
 
 
