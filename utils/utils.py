@@ -2,9 +2,6 @@ import argparse
 import os
 import torchvision.transforms as transforms
 
-MEAN = [0.485, 0.456, 0.406]
-STD = [0.229, 0.224, 0.225]
-
 def get_input_output_args():
 	parser = argparse.ArgumentParser(description="Video to Image")
 	parser.add_argument('-d', dest='directory', type=str, required=True, help='Path to directory with videos')
@@ -18,7 +15,8 @@ def transform_img(img, size):
 	transform_list.append(transforms.CenterCrop(min_size))
 	transform_list.append(transforms.Resize(size))
 	transform_list.append(transforms.ToTensor())
-	transform_list.append(transforms.Normalize(mean=MEAN, std=STD))
+	transform_list.append(transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225]))
 	transform = transforms.Compose(transform_list)
 
 	return transform(img)
