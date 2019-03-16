@@ -4,6 +4,7 @@ sys.path.append(str(Path(__file__).absolute().parent.parent))
 
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import torch
 import torch.nn as nn
 
@@ -25,6 +26,8 @@ class ResNetFeatureExtractor(BaseFeatureExtractor):
 
 	def preprocess(self, imgs, img_ids, out, name, device):
 		outpath = join(out, name)
+		if os.path.exists(outpath):
+			return
 		make_clean_path(outpath)
 		combined_imgs = []
 		for i, img_path in enumerate(imgs):
@@ -36,6 +39,7 @@ class ResNetFeatureExtractor(BaseFeatureExtractor):
 			plt.cla()
 			plt.clf()"""
 
+		combined_imgs = combined_imgs[:64]
 		x = torch.stack(combined_imgs)
 		features = self.extract_features(x, device)
 

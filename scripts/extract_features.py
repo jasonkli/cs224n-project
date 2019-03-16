@@ -36,7 +36,7 @@ def extract_msvd_features():
 
 def extract_mpii_features():
 	path = '../data/mpii/jpgAllFrames'
-	out = '../data/mpii/imgs_pre'
+	out = '../data/mpii/p3d_pre'
 
 	res = False if 'p3d' in out else True
 	make_safe_path(out)
@@ -60,7 +60,7 @@ def extract_mpii_features():
 		imgs = imgs[::sample_rate]
 		img_ids = img_ids[::sample_rate]
 		model.preprocess(imgs, img_ids, out, name, device)
-		break
+		
 
 def main():
 	#extract_msvd_features()

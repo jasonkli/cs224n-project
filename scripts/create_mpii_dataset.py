@@ -12,16 +12,16 @@ def generate_csv(split, data, name):
 	outfile = join('../data/mpii', '{}.csv'.format(name))
 	out_list = []
 	for d in data:
-		video = d[0].split('/')[0]
+		video = d[0].split('\\')[0]
 		if video in split:
-			out_list.append([d[0].split('/')[1], ' '.join(d[1])])
+			out_list.append([d[0].split('\\')[1], ' '.join(d[1])])
 	df = pd.DataFrame(out_list, columns=['VideoID', 'Target'])
 	df.to_csv(outfile)
 
 def get_counts(data, split):
 	word_counts = {}
 	for d in data:
-		video = d[0].split('/')[0]
+		video = d[0].split('\\')[0]
 		if video in split:
 			words = d[1]
 			for word in words:

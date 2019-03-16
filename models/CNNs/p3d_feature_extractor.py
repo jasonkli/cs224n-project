@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).absolute().parent.parent))
 
 import numpy as np
+import os
 import torch
 
 from os.path import join
@@ -24,6 +25,9 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 
 	def preprocess(self, imgs, img_ids, out, name, device):
 		outpath = join(out, name)
+		if os.path.exists(outpath):
+			return
+		
 		make_clean_path(outpath)
 
 		seq_len = len(imgs)
@@ -40,6 +44,8 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 				sequence.append(img)
 			sequence = torch.stack(sequence, dim=1)
 			sequences.append(sequence)
+			if len(sequences) == 4:
+				break
 
 		x = torch.stack(sequences)
 		features = self.extract_features(x, device)
