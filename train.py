@@ -109,18 +109,18 @@ def train(args):
 	for name, param in model.named_parameters():
 		if param.dim() > 1 and name not in to_filter:
 			nn.init.xavier_uniform_(param)
-		if name in to_filter:
-			param.requires_grad = False
+		#if name in to_filter:
+			#param.requires_grad = False
 
 	special_params = [param for name, param in model.named_parameters() if name in to_filter]
 	base_params = [param for name, param in model.named_parameters() if name not in to_filter]
-	"""param_list = [
-		{'params': base_params},
-		{'params': special_params, 'lr':args.lr/10.0}
-	]"""
 	param_list = [
-		{'params': base_params}
+		{'params': base_params},
+		{'params': special_params, 'lr':args.lr}
 	]
+	"""param_list = [
+		{'params': base_params}
+	]"""
 	if args.sgd:
 		optimizer = optim.SGD(param_list, lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
 	else:

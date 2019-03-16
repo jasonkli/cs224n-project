@@ -101,7 +101,7 @@ def decode(model, videos, references, vid_path, outfile):
 	print(count)
 
 
-def beam_search(model, videos, vid_path, beam_size=20, max_decoding_time_step=20, max_frames=64):
+def beam_search(model, videos, vid_path, beam_size=10, max_decoding_time_step=20, max_frames=64):
 	""" Run beam search to construct hypotheses for a list of src-language sentences.
 	@param model (NMT): NMT Model
 	@param test_data_src (List[List[str]]): List of sentences (words) in source language, from test set.
@@ -127,12 +127,15 @@ def beam_search(model, videos, vid_path, beam_size=20, max_decoding_time_step=20
 
 def main():
 	args = get_arguments()
+	directory = 'data/mpii'
+	data_path = 'data/msvd/new_word2id.json' if directory == 'data/msvd' else 'data/mpii/new_word2id_mpii.json'
+	embed_path = 'data/msvd/word_embed.npy' if directory == 'data/msvd' else 'data/mpii/word_embed_mpii.npy'
 	if 'p3d' in args.vid_path:
 		#model = LSTMCombined(args.vocab, device=device, encoder='p3d', pre_embed='data/msvd/word_embed.npy')
-		model = LSTMCombined('data/msvd/new_word2id.json', device=device, pre_embed='data/msvd/word_embed.npy', encoder='p3d')	
+		model = LSTMCombined(data_path, device=device, pre_embed=embed_path, encoder='p3d')	
 	else:
 		#model = LSTMCombined(args.vocab, device=device, pre_embed='data/msvd/word_embed.npy')
-		model = LSTMCombined('data/msvd/new_word2id.json', device=device, pre_embed='data/msvd/word_embed.npy')	
+		model = LSTMCombined(data_path, device=device, pre_embed=embed_path)	
 	model.load_state_dict(torch.load(args.path,  map_location='cpu'))
 	model.to(device)
 	model.eval()
