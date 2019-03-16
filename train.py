@@ -26,8 +26,8 @@ def get_arguments():
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
 	parser.add_argument('--train_iter', dest='train_iter', type=int, default=200)
 	parser.add_argument('--val_iter', dest='val_iter', type=int, default=2000)
-	parser.add_argument('--max_frames', dest='max_frames', type=int, default=64)
-	parser.add_argument('--patience', dest='patience', type=int, default=5)
+	parser.add_argument('--max_frames', dest='max_frames', type=int, default=32)
+	parser.add_argument('--patience', dest='patience', type=int, default=64)
 	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.3)
 	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
 	parser.add_argument('--gamma', dest='gamma', type=float, default=5.0)
@@ -68,26 +68,30 @@ def plot(x, y, path, label):
 
 
 def train(args):
+	data_path = 'data/msvd/new_word2id.json' if args.directory == 'data/mpii' else 'data/mpii/new_word2id_mpii.json'
+	embed_path = 'data/msvd/word_embed.npy' if args.directory == 'data/mpii' else 'data/mpii/word_embed_mpii.npy'
 	if args.model == 'lstm':
-		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
-		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 
-		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device)	
+		#model = LSTMCombined('data/msvd/msvd_vocab.json', device=device)	
+		model = LSTMCombined(data_path, device=device, pre_embed=embed_path)	
 	elif args.model == 'p3d':
-		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
 					else P3DMSVDDataset(max_frames=args.max_frames, split='train'))
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
+		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
 					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
-		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 
-		model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')
+		#model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')
+		model = LSTMCombined(data_path, device=device, pre_embed=embed_path, encoder='p3d')	
 	elif args.model == 'basic':
 		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
@@ -100,19 +104,32 @@ def train(args):
 		model = LSTMBasic('data/msvd/msvd_vocab.json', device=device)
 
 
-	model.to(device)
-	for param in model.parameters():
-		param.data.uniform_(-0.1,0.1)
 
+	to_filter = ['to_embeddings.weight']
+	for name, param in model.named_parameters():
+		if param.dim() > 1 and name not in to_filter:
+			nn.init.xavier_uniform_(param)
+		if name in to_filter:
+			param.requires_grad = False
+
+	special_params = [param for name, param in model.named_parameters() if name in to_filter]
+	base_params = [param for name, param in model.named_parameters() if name not in to_filter]
+	"""param_list = [
+		{'params': base_params},
+		{'params': special_params, 'lr':args.lr/10.0}
+	]"""
+	param_list = [
+		{'params': base_params}
+	]
 	if args.sgd:
-		optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
+		optimizer = optim.SGD(param_list, lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
 	else:
-		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+		optimizer = optim.Adam(param_list, lr=args.lr, weight_decay=args.weight_decay)
 
 	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
 	#scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=args.decay_rate)
 
-
+	model.to(device)
 	iteration = 0
 	patience = 0
 	cum_loss = report_loss = cum_tgt_words = report_tgt_words = cum_examples = report_examples = 0

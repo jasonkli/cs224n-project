@@ -11,18 +11,18 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 class P3DEncoder(nn.Module):
 
-	def __init__(self, feature_size=2048, attention_size=None, hidden_decoder_size=512, num_layers=1, dropout_rate=0.0):
+	def __init__(self, feature_size=2048, attention_size=None, hidden_decoder_size=512, num_layers=1, dropout_rate=0.2):
 		
 		super().__init__()
 		self.attention_size = attention_size
 		if self.attention_size is not None:
-			self.feature_transform = LSTMHighway(feature_size, attention_size)
-			#self.feature_transform = nn.Linear(feature_size, attention_size)
+			#self.feature_transform = LSTMHighway(feature_size, attention_size)
+			self.feature_transform = nn.Linear(feature_size, attention_size)
 
-		self.hidden_transform = LSTMHighway(feature_size, hidden_decoder_size)
-		self.cell_transform = LSTMHighway(feature_size, hidden_decoder_size)
-		#self.hidden_transform = nn.Linear(feature_size, hidden_decoder_size)
-		#self.cell_transform = nn.Linear(feature_size, hidden_decoder_size)
+		#self.hidden_transform = LSTMHighway(feature_size, hidden_decoder_size)
+		#self.cell_transform = LSTMHighway(feature_size, hidden_decoder_size)
+		self.hidden_transform = nn.Linear(feature_size, hidden_decoder_size)
+		self.cell_transform = nn.Linear(feature_size, hidden_decoder_size)
 		self.num_layers = num_layers
 		self.dropout = nn.Dropout(dropout_rate)
 

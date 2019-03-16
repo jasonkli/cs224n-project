@@ -20,7 +20,7 @@ Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 class LSTMCombined(nn.Module):
 
     def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=1024, hidden_size_decoder=1024, 
-                    embed_size=128, att_projection_dim=1024, num_layers=2, device='cpu', dropout_rate=0.3, encoder='lstm'):
+                    embed_size=512, att_projection_dim=1024, num_layers=2, device='cpu', dropout_rate=0.3, encoder='lstm', pre_embed=None):
 
         super(LSTMCombined, self).__init__()
         self.cnn_feature_size = cnn_feature_size
@@ -36,9 +36,16 @@ class LSTMCombined(nn.Module):
         self.vocab_id2word = {v: k for k, v in self.vocab.items()}
         self.device = device
         self.dropout_rate = dropout_rate
+        self.pre_embed = pre_embed
         #self.dropout = nn.Dropout(0.5)
 
         self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
+        if pre_embed is not None:
+            embed_tensor = torch.from_numpy(np.load(pre_embed)).float()
+            self.to_embeddings.weight = nn.Parameter(embed_tensor)
+            #self.embed_size = embed_size = embed_tensor.size(1)
+            self.embed_projection = nn.Linear(embed_tensor.size(1), self.embed_size)
+
         if encoder == 'p3d':
             self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder , hidden_size_decoder, num_layers, dropout_rate) 
             self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_layers, device, dropout_rate)
@@ -56,7 +63,8 @@ class LSTMCombined(nn.Module):
         captions_actual_lengths, captions_padded = self.pad_captions(captions) # captions_padded: (max_sent_length, batch_size)
         captions_padded_exclude_last = captions_padded[:-1]
         captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)  # (max_sent_length - 1, batch_size, embed_size)
-        captions_padded_embedded = captions_padded_embedded # Removed dropout
+        if self.pre_embed is not None:
+            captions_padded_embedded = self.embed_projection(captions_padded_embedded)
 
         enc_hiddens, dec_init_state_1, dec_init_state_2 = self.encoder(vids_padded, vids_actual_lengths)
         enc_masks = self.generate_masks(enc_hiddens, vids_actual_lengths)
