@@ -170,8 +170,8 @@ class LSTMCombined(nn.Module):
 
             y_tm1 = torch.tensor([self.vocab[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
             y_t_embed = self.to_embeddings(y_tm1)
-            if self.pre_embed is not None:
-                y_t_embed = self.embed_projection(y_t_embed)
+            """if self.pre_embed is not None:
+                y_t_embed = self.embed_projection(y_t_embed)"""
 
             dec_state_1, dec_state_2, output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
                 exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)         

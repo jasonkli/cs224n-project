@@ -10,7 +10,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from dataset import LSTMMSVDDataset, P3DMSVDDataset
-from models import LSTMCombined
+from models import LSTMCombined, Transformer
 from models.lstm_no_att import LSTMBasic
 from os.path import join
 from utils import custom_collate_fn, make_clean_path
@@ -32,7 +32,7 @@ def get_arguments():
 	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
 	parser.add_argument('--gamma', dest='gamma', type=float, default=5.0)
 	parser.add_argument('--directory', dest='directory', type=str, default=None)
-	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic'], default='lstm')
+	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic', 'transformer', 'transformer_p3d'], default='lstm')
 	parser.add_argument('--save_dir', dest='save_dir', default='checkpoints/')
 
 	return parser.parse_args()
@@ -92,7 +92,31 @@ def train(args):
 
 		#model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')
 		model = LSTMCombined(data_path, device=device, pre_embed=embed_path, encoder='p3d')	
-	elif args.model == 'basic':
+
+	elif args.model == 'transformer':
+		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
+					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
+
+		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
+					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
+		model = Transformer(data_path, pre_embed=embed_path)
+
+	elif args.model == 'transformer_p3d':
+		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
+					else P3DMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
+
+		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
+					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
+
+		model = Transformer(data_path, pre_embed=embed_path)
+
+
+
+	"""elif args.model == 'basic':
 		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames) if args.directory 
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
@@ -101,7 +125,7 @@ def train(args):
 					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=custom_collate_fn)
 
-		model = LSTMBasic('data/msvd/msvd_vocab.json', device=device)
+		model = LSTMBasic('data/msvd/msvd_vocab.json', device=device)"""
 
 
 
@@ -116,7 +140,7 @@ def train(args):
 	base_params = [param for name, param in model.named_parameters() if name not in to_filter]
 	param_list = [
 		{'params': base_params},
-		{'params': special_params, 'lr':args.lr}
+		{'params': special_params, 'lr':args.lr/10.0}
 	]
 	"""param_list = [
 		{'params': base_params}
@@ -124,7 +148,7 @@ def train(args):
 	if args.sgd:
 		optimizer = optim.SGD(param_list, lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
 	else:
-		optimizer = optim.Adam(param_list, lr=args.lr, weight_decay=args.weight_decay)
+		optimizer = optim.Adam(param_list, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.99))
 
 	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.decay_rate, patience=args.patience, verbose=True)
 	#scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=args.decay_rate)
