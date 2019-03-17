@@ -43,8 +43,8 @@ class LSTMCombined(nn.Module):
         if pre_embed is not None:
             embed_tensor = torch.from_numpy(np.load(pre_embed)).float()
             self.to_embeddings.weight = nn.Parameter(embed_tensor)
-            #self.embed_size = embed_size = embed_tensor.size(1)
-            self.embed_projection = nn.Linear(embed_tensor.size(1), self.embed_size)
+            self.embed_size = embed_size = embed_tensor.size(1)
+            #self.embed_projection = nn.Linear(embed_tensor.size(1), self.embed_size)
 
         if encoder == 'p3d':
             self.encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder , hidden_size_decoder, num_layers, dropout_rate) 
@@ -63,8 +63,8 @@ class LSTMCombined(nn.Module):
         captions_actual_lengths, captions_padded = self.pad_captions(captions) # captions_padded: (max_sent_length, batch_size)
         captions_padded_exclude_last = captions_padded[:-1]
         captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)  # (max_sent_length - 1, batch_size, embed_size)
-        if self.pre_embed is not None:
-            captions_padded_embedded = self.embed_projection(captions_padded_embedded)
+        #if self.pre_embed is not None:
+            #captions_padded_embedded = self.embed_projection(captions_padded_embedded)
 
         enc_hiddens, dec_init_state_1, dec_init_state_2 = self.encoder(vids_padded, vids_actual_lengths)
         enc_masks = self.generate_masks(enc_hiddens, vids_actual_lengths)
@@ -170,6 +170,8 @@ class LSTMCombined(nn.Module):
 
             y_tm1 = torch.tensor([self.vocab[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
             y_t_embed = self.to_embeddings(y_tm1)
+            """if self.pre_embed is not None:
+                y_t_embed = self.embed_projection(y_t_embed)"""
 
             dec_state_1, dec_state_2, output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
                 exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)         

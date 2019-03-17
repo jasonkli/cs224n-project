@@ -1,3 +1,4 @@
+# Adapted from: https://towardsdatascience.com/how-to-code-the-transformer-in-pytorch-24db27c8f9ec
 import json
 import math
 import numpy as np
@@ -8,6 +9,7 @@ import torch.nn.utils
 import torch.nn.functional as F
 
 from collections import namedtuple
+from os.path import join
 from typing import List, Tuple, Dict, Set, Union
 
 Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
@@ -19,8 +21,8 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # num_heads * head_dim = model_size
 
 class Transformer(nn.Module):
-	def __init__(self, file_path, input_feature_size, embed_size, model_size, num_heads=8, num_layers=6,
-					max_len_vid=200, max_len_caption=30, hidden_size=2048, dropout=0.1, pre_embed=None):
+	def __init__(self, file_path, input_feature_size=2048, embed_size=128, model_size=1024, num_heads=16, num_layers=6,
+					max_len_vid=100, max_len_caption=30, hidden_size=2048, dropout_rate=0.1, pre_embed=None):
 		super().__init__()
 		self.frame_pad_token = [0] * input_feature_size
 		self.file_path = file_path
@@ -28,18 +30,26 @@ class Transformer(nn.Module):
 		self.vocab_id2word = {v: k for k, v in self.vocab.items()}
 		self.max_len_vid = max_len_vid
 		self.max_len_caption = max_len_caption
+		self.input_feature_size = input_feature_size
+		self.embed_size = embed_size
+		self.model_size = model_size
+		self.num_heads = num_heads
+		self.num_layers = num_layers
+		self.hidden_size = hidden_size
+		self.dropout_rate = dropout_rate
+
 
 		self.feature_projection = nn.Linear(input_feature_size, model_size)
-		self.encoder = Encoder(model_size, num_heads, max_len_vid, num_layers, hidden_size, dropout)
+		self.encoder = Encoder(model_size, num_heads, max_len_vid, num_layers, hidden_size, dropout_rate)
 
 		self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
 		if pre_embed is not None:
 			embed_tensor = torch.from_numpy(np.load(pre_embed)).float()
 			self.to_embeddings.weight = nn.Parameter(embed_tensor)
-			self.embed_size = embed_size = embed_tensor.size()
+			self.embed_size = embed_size = embed_tensor.size(1)
 
 		self.embed_projection = nn.Linear(embed_size, model_size)
-		self.decoder = Decoder(model_size, num_heads, max_len_caption, num_layers, hidden_size, dropout)
+		self.decoder = Decoder(model_size, num_heads, max_len_caption, num_layers, hidden_size, dropout_rate)
 		self.target_vocab_projection = nn.Linear(model_size, len(self.vocab))
 
 	def forward(self, vid, captions):
@@ -61,20 +71,32 @@ class Transformer(nn.Module):
 		P = F.log_softmax(self.target_vocab_projection(outputs), dim=-1) #(max_sent_length - 1, batch_size, vocab_size)
 		target_masks = (captions_padded != self.vocab['<pad>']).float() # Zero out probabilities for which we have nothing in the captions
 		target_words_log_prob = torch.gather(P, index=captions_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:] #(max_sent_length - 1, batch_size)
-		prob = torch.tensor(target_words_log_prob.data.exp(), device=device)
+		prob = Variable(target_words_log_prob.data.exp()).to(device)
 		scores = target_words_log_prob.sum(dim=0)
 		return scores, prob, target_words_log_prob
 
+	def save_arguments(self, outpath, key, args=None):
+		arg_dict = {}
+		arg_dict['file_path'] = self.file_path
+		arg_dict['input_feature_size'] = self.input_feature_size
+		arg_dict['model_size'] = self.model_size
+		arg_dict['num_heads'] = self.num_heads
+		arg_dict['num_layers'] = self.num_layers
+		arg_dict['hidden_size'] = self.hidden_size
+		arg_dict['embed_size'] = self.embed_size
+		arg_dict['dropout_rate'] = self.dropout_rate
+		
+		with open(join(outpath, '{}.json'.format(key)), 'w') as f:
+			json.dump(arg_dict, f)
+
+		if args is not None:
+			with open(join(outpath, '{}_args.json'.format(key)), 'w') as f:
+				json.dump(args, f)
+
+
+
 	def beam_search(self, video, beam_size=10, max_decoding_time_step=70) -> List[Hypothesis]:
-		""" Given a single video, perform beam search, yielding captions.
-		@param video (List[List[float]]): a single video (consisting of frame vectors)
-		@param beam_size (int): beam size
-		@param max_decoding_time_step (int): maximum number of time steps to unroll the decoding RNN
-		@returns hypotheses (List[Hypothesis]): a list of hypothesis, each hypothesis has two fields:
-				value: List[str]: the decoded caption, represented as a list of words
-				score: float: the log-likelihood of the caption
-		"""
-		vids_actual_lengths, vids_padded = self.pad_vid_frames([video])
+		vids_actual_lengths, vids_padded = self.pad_vid_frames([video], self.max_len_vid)
 		vid_mask = self.generate_masks(vids_padded, vids_actual_lengths) 
 		vids_padded = self.feature_projection(vids_padded)
 		src_encodings = self.encoder(vids_padded, vid_mask)
@@ -100,13 +122,14 @@ class Transformer(nn.Module):
 			y_t_embed= self.embed_projection(y_t_embed)
 
 			cap_mask = torch.from_numpy(np.triu(np.ones((1, t, t)), k=1).astype(np.uint8))
-			cap_mask = mask.to(device)
-			output_t = self.decoder(y_t_embed, src_encodings, vid_mask, cap_mask)
+			cap_mask = cap_mask.to(device)
+			output_t = self.decoder(y_t_embed, exp_src_encodings, vid_mask, cap_mask)
 
 			"""dec_state_1, dec_state_2, output_t = self.decoder.step(y_t_embed, h_prev_dec, h_tm0, h_tm1, 
 				exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)"""    
 
 			log_p_t = F.log_softmax(self.target_vocab_projection(output_t), dim=-1)
+			log_p_t = log_p_t[:,t-1]
 
 			live_hyp_num = beam_size - len(completed_hypotheses)
 			contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
@@ -170,13 +193,6 @@ class Transformer(nn.Module):
 		return enc_masks.to(device)
 
 	def pad_vid_frames(self, source, max_len):
-		""" Sort source video list by length of video (longest to shortest) and convert list of videos (frames) 
-		into tensor with necessary padding for shorter videos (i.e. videos with fewer frames). 
-
-		@param source (List[List[List[float]]): list of videos (frames)
-		@returns vids_actual_lengths (List[int]): List of actual lengths for each of the source videos in the batch
-		@returns vids_padded_tensor: tensor of (max_vid_length, batch_size, cnn_feature_size)
-		"""
 		source = sorted(source, key=lambda vid: len(vid), reverse=True)
 		vids_actual_lengths = [len(vid) for vid in source]
 
@@ -208,11 +224,13 @@ class Encoder(nn.Module):
 		self.positional_encoder = PositionalEncoder(model_size, max_len)
 		self.layers = nn.ModuleList([EncoderLayer(model_size, num_heads, hidden_size, dropout)
 										for _ in range(num_layers)])
+		self.layer_norm = nn.LayerNorm(model_size)
 
 	def forward(self, vids_padded, mask):
 		out = self.positional_encoder(vids_padded)
 		for layer in self.layers:
 			out = layer(out, mask)
+		out = self.layer_norm(out)
 		return out
 
 class Decoder(nn.Module):
@@ -221,11 +239,13 @@ class Decoder(nn.Module):
 		self.positional_encoder = PositionalEncoder(model_size, max_len)
 		self.layers = nn.ModuleList([DecoderLayer(model_size, num_heads, hidden_size, dropout)
 										for _ in range(num_layers)])
+		self.layer_norm = nn.LayerNorm(model_size)
 
 	def forward(self, captions_padded_embedded, enc_out, vid_mask, cap_mask):
 		out = self.positional_encoder(captions_padded_embedded)
 		for layer in self.layers:
 			out = layer(out, enc_out, vid_mask, cap_mask)
+		out = self.layer_norm(out)
 		return out
 
 class EncoderLayer(nn.Module):
@@ -234,10 +254,23 @@ class EncoderLayer(nn.Module):
 		self.self_attention = MultiHeadAttention(model_size, num_heads, dropout)
 		self.feed_forward = PositionwiseFeedForward(model_size, hidden_size, dropout)
 
+		self.layer_norm1 = nn.LayerNorm(model_size)
+		self.layer_norm2 = nn.LayerNorm(model_size)
+		self.dropout1 = nn.Dropout(dropout)
+		self.dropout2 = nn.Dropout(dropout)
+
 	def forward(self, x, mask):
-		out = self.self_attention(x, x, x, mask)
+		x_normed = self.layer_norm1(x)
+		x = x + self.dropout1(self.self_attention(x_normed, x_normed, x_normed, mask))
+		x_normed = self.layer_norm2(x)
+		x = x + self.dropout2(self.feed_forward(x_normed))
+		return x
+
+		"""out = self.self_attention(x, x, x, mask)
 		out = self.feed_forward(out)
-		return out
+		#out = self.dropout(out)
+		#out = self.layer_norm(x + out)
+		return out"""
 
 class DecoderLayer(nn.Module):
 	def __init__(self, model_size, num_heads, hidden_size=2048, dropout=0.1):
@@ -247,28 +280,40 @@ class DecoderLayer(nn.Module):
 		self.enc_dec_attention = MultiHeadAttention(model_size, num_heads, dropout)
 		self.feed_forward = PositionwiseFeedForward(model_size, hidden_size, dropout)
 
+		self.layer_norm1 = nn.LayerNorm(model_size)
+		self.layer_norm2 = nn.LayerNorm(model_size)
+		self.layer_norm3 = nn.LayerNorm(model_size)
+		self.dropout1 = nn.Dropout(dropout)
+		self.dropout2 = nn.Dropout(dropout)
+		self.dropout3 = nn.Dropout(dropout)
+
 	def forward(self, x, enc_out, vid_mask, cap_mask):
-		out = self.self_attention(x, x, x, cap_mask)
+		x_normed = self.layer_norm1(x)
+		x = x + self.dropout1(self.self_attention(x_normed, x_normed, x_normed, cap_mask))
+		x_normed = self.layer_norm2(x)
+		x = x + self.dropout2(self.enc_dec_attention(x_normed, enc_out, enc_out, vid_mask))
+		x_normed = self.layer_norm3(x)
+		x = x + self.dropout3(self.feed_forward(x_normed))
+		return x
+		
+		"""out = self.self_attention(x, x, x, cap_mask)
 		out = self.enc_dec_attention(out, enc_out, enc_out, vid_mask)
 		out = self.feed_forward(out)
-		return out
+		return out"""
 
 class PositionwiseFeedForward(nn.Module):
 	def __init__(self, model_size, hidden_size=2048, dropout=0.1):
 		super().__init__()
 
 		self.layer1 = nn.Linear(model_size, hidden_size)
-		self.dropout = nn.Dropout(dropout)
+		#self.dropout = nn.Dropout(dropout)
 		self.layer2 = nn.Linear(hidden_size, model_size)
-		self.layer_norm = nn.LayerNorm(model_size)
+		#self.layer_norm = nn.LayerNorm(model_size)
 
 	def forward(self, x):
 		#Input/output: (batch_size, length, model_size)
-		res = x
 		out = F.relu(self.layer1(x))
 		out = self.layer2(out)
-		out = self.dropout(out)
-		out = self.layer_norm(res + out)
 		return out
 
 class MultiHeadAttention(nn.Module):
@@ -283,8 +328,8 @@ class MultiHeadAttention(nn.Module):
 		self.k_transform = nn.Linear(self.model_size, self.model_size)
 		self.v_transform = nn.Linear(self.model_size, self.model_size)
 		self.final_projection =  nn.Linear(self.model_size, self.model_size)
-		self.dropout = nn.Dropout(dropout)
-		self.layer_norm = nn.LayerNorm(model_size)
+		#self.dropout = nn.Dropout(dropout)
+		#self.layer_norm = nn.LayerNorm(model_size)
 
 	def forward(self, querys, keys, values, mask):
 		# Querys/keys/values: (batch_size, length, model_size)
@@ -300,8 +345,8 @@ class MultiHeadAttention(nn.Module):
 		attention_scores = compute_attention(querys, keys, values, self.head_dim, mask)
 		out = attention_scores.transpose(1,2).contiguous().view(batch_size, -1, self.model_size)
 		out = self.final_projection(out)
-		out = self.dropout(out)
-		out = self.layer_norm(res + out)
+		#out = self.dropout(out)
+		#out = self.layer_norm(res + out)
 		return out # Output should be same as input
 
 class PositionalEncoder(nn.Module):
@@ -313,8 +358,8 @@ class PositionalEncoder(nn.Module):
 		positional_embed = torch.zeros(1, max_len, model_size)
 		for i in range(max_len):
 			for j in range(0, model_size, 2):
-				positional_embed[0, i, j] = math.sin(i / (CONST ** (2 * j / self.model_size)))
-				positional_embed[0, i, j+1] = math.cos(i / (CONST ** (2 * j/ self.model_size)))
+				positional_embed[0, i, j] = math.sin(i / (CONST ** (j / self.model_size)))
+				positional_embed[0, i, j+1] = math.cos(i / (CONST ** (j / self.model_size)))
 
 		self.register_buffer('positional_embed', positional_embed)
 
@@ -346,7 +391,6 @@ if __name__ == '__main__':
 	model = Transformer(file_path="dummy_vocab.json", input_feature_size=5, embed_size=4, model_size=512, num_heads=8, num_layers=6,
 					max_len_vid=20, max_len_caption=20, hidden_size=16, dropout=0.1)
 	print(model.forward(videos, captions))
-
 
 
 
