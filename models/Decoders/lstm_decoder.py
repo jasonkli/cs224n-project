@@ -39,7 +39,7 @@ class LSTMDecoder(nn.Module):
         batch_size = enc_hiddens.size(0)
         h_prev_dec = torch.ones(batch_size, self.hidden_size_decoder, device=self.device)/self.hidden_size_encoder
         outputs = []
-        enc_hiddens_proj = self.att_projection(enc_hiddens) # (batch_size, max_vid_length, hidden_size_decoder)
+        enc_hiddens_proj = self.att_projection(enc_hiddens) # (batch_size, max_vid_length, att_projection_dim)
         dec_state_layer1 = dec_init_state_1
         dec_state_layer2 = dec_init_state_2
         for elem in torch.split(captions_padded_embedded, 1): 
