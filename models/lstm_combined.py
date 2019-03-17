@@ -177,7 +177,7 @@ class LSTMCombined(nn.Module):
                                                       #exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
             (h_t0, cell_t0) = dec_state_1
             if self.num_layers > 1:
-                (h_t, cell_t) = dec_state_1
+                (h_t, cell_t) = dec_state_2
             log_p_t = F.log_softmax(self.target_vocab_projection(output_t), dim=-1)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
