@@ -15,7 +15,7 @@ from utils import *
 MIN_FRAMES = 16
 
 def extract_images(video, outpath):
-	frequency = 10
+	frequency = 3
 	vidcap = cv2.VideoCapture(video)
 	length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
 	if length < MIN_FRAMES * frequency:
@@ -31,7 +31,7 @@ def extract_images(video, outpath):
 		success, image = vidcap.read()
 		count += 1
 
-	assert num_output >- 16
+	assert num_output >= 16
 
 	return num_output
 

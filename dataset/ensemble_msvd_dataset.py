@@ -11,7 +11,7 @@ from .lstm_msvd_dataset import LSTMMSVDDataset
 from .p3d_msvd_dataset import P3DMSVDDataset
 from .base_msvd_dataset import BaseMSVDDataset
 
-class EnsembleMSVDDataset(Dataset):
+class EnsembleMSVDDataset(BaseMSVDDataset):
 
 	def __init__(self, directory='data/msvd', max_frames=96, split='train'):
 
@@ -28,3 +28,9 @@ class EnsembleMSVDDataset(Dataset):
 		vectors1 = LSTMMSVDDataset.get_vectors(vid_path2d, self.max_frames)
 		vectors2 = P3DMSVDDataset.get_vectors(vid_path3d, self.max_frames)
 		return (vectors1, vectors2), target
+
+	@staticmethod
+	def get_vectors(vid_path2d, vid_path3d, max_frames):
+		vectors1 = LSTMMSVDDataset.get_vectors(vid_path2d, max_frames)
+		vectors2 = P3DMSVDDataset.get_vectors(vid_path3d, max_frames)
+		return (vectors1, vectors2)

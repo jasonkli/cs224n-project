@@ -13,7 +13,8 @@ class P3DMSVDDataset(BaseMSVDDataset):
 	def __init__(self, directory='data/msvd', max_frames=96, split='train'):
 
 		super().__init__(directory, max_frames, split)
-		self.path = join(directory, 'p3d_pre')
+		#self.path = join(directory, 'p3d_pre_old')
+		self.path = join(directory, 'p3d_feat')
 
 	@staticmethod
 	def get_vectors(vid_path, max_frames):
@@ -25,7 +26,8 @@ class P3DMSVDDataset(BaseMSVDDataset):
 			slice_index = np.random.choice(len(vector_files) - int(max_frames / FRAMES_PER_FILE) + 1)
 			vector_files = vector_files[slice_index:slice_index+int(max_frames / FRAMES_PER_FILE)]
 
-		vectors = np.concatenate([np.load(join(vid_path, f)) for f in vector_files], axis=0)
-		vectors = [np.squeeze(elem, axis=0).tolist() for elem in np.vsplit(vectors, vectors.shape[0])]
+		#vectors = np.concatenate([np.load(join(vid_path, f)) for f in vector_files], axis=0)
+		#vectors = [np.squeeze(elem, axis=0).tolist() for elem in np.vsplit(vectors, vectors.shape[0])]
+		vectors = [np.load(join(vid_path, f)).tolist() for f in vector_files]
 
 		return vectors

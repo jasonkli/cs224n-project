@@ -21,8 +21,8 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # num_heads * head_dim = model_size
 
 class Transformer(nn.Module):
-	def __init__(self, file_path, input_feature_size=2048, embed_size=128, model_size=1024, num_heads=16, num_layers=6,
-					max_len_vid=100, max_len_caption=30, hidden_size=2048, dropout_rate=0.1, pre_embed=None):
+	def __init__(self, file_path, input_feature_size=2048, embed_size=128, model_size=512, num_heads=8, num_layers=6,
+					max_len_vid=40, max_len_caption=30, hidden_size=2048, dropout_rate=0.2, pre_embed=None):
 		super().__init__()
 		self.frame_pad_token = [0] * input_feature_size
 		self.file_path = file_path
@@ -39,8 +39,11 @@ class Transformer(nn.Module):
 		self.dropout_rate = dropout_rate
 
 
+		self.dropout1 = nn.Dropout(0.0)
+		self.dropout2 = nn.Dropout(0.0)
+		self.dropout3 = nn.Dropout(dropout_rate)
 		self.feature_projection = nn.Linear(input_feature_size, model_size)
-		self.encoder = Encoder(model_size, num_heads, max_len_vid, num_layers, hidden_size, dropout_rate)
+		self.encoder = Encoder(model_size, num_heads, max_len_vid, 16, hidden_size, dropout_rate)
 
 		self.to_embeddings = nn.Embedding(len(self.vocab), embed_size, self.vocab['<pad>'])
 		if pre_embed is not None:
@@ -49,7 +52,7 @@ class Transformer(nn.Module):
 			self.embed_size = embed_size = embed_tensor.size(1)
 
 		self.embed_projection = nn.Linear(embed_size, model_size)
-		self.decoder = Decoder(model_size, num_heads, max_len_caption, num_layers, hidden_size, dropout_rate)
+		self.decoder = Decoder(model_size, num_heads, max_len_caption, 8, hidden_size, dropout_rate)
 		self.target_vocab_projection = nn.Linear(model_size, len(self.vocab))
 
 	def forward(self, vid, captions):
@@ -61,14 +64,14 @@ class Transformer(nn.Module):
 		captions_padded_embedded = self.to_embeddings(captions_padded_exclude_last)
 		cap_mask = self.generate_masks(captions_padded_embedded, captions_actual_lengths, dec=True) #(batch_size, max_source_length, max_source_length)
 
-		vids_padded = self.feature_projection(vids_padded) #(batch_size, max_length, model_size)
+		vids_padded = self.feature_projection(self.dropout1(vids_padded)) #(batch_size, max_length, model_size)
 		enc_out = self.encoder(vids_padded, vid_mask)
-		captions_padded_embedded = self.embed_projection(captions_padded_embedded) #(batch_size, max_sent_length - 1, model_size)
+		captions_padded_embedded = self.embed_projection(self.dropout2(captions_padded_embedded)) #(batch_size, max_sent_length - 1, model_size)
 		outputs = self.decoder(captions_padded_embedded, enc_out, vid_mask, cap_mask) #(batch_size, max_sent_length - 1, model_size)
 
 		outputs = outputs.transpose(0, 1) #(max_sent_length - 1, batch_size, model_size)
 		captions_padded = captions_padded.transpose(0,1)
-		P = F.log_softmax(self.target_vocab_projection(outputs), dim=-1) #(max_sent_length - 1, batch_size, vocab_size)
+		P = F.log_softmax(self.target_vocab_projection(self.dropout3(outputs)), dim=-1) #(max_sent_length - 1, batch_size, vocab_size)
 		target_masks = (captions_padded != self.vocab['<pad>']).float() # Zero out probabilities for which we have nothing in the captions
 		target_words_log_prob = torch.gather(P, index=captions_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:] #(max_sent_length - 1, batch_size)
 		prob = Variable(target_words_log_prob.data.exp()).to(device)
@@ -95,7 +98,7 @@ class Transformer(nn.Module):
 
 
 
-	def beam_search(self, video, beam_size=10, max_decoding_time_step=70) -> List[Hypothesis]:
+	def beam_search(self, video, beam_size=10, max_decoding_time_step=10) -> List[Hypothesis]:
 		vids_actual_lengths, vids_padded = self.pad_vid_frames([video], self.max_len_vid)
 		vid_mask = self.generate_masks(vids_padded, vids_actual_lengths) 
 		vids_padded = self.feature_projection(vids_padded)
@@ -130,10 +133,10 @@ class Transformer(nn.Module):
 
 			log_p_t = F.log_softmax(self.target_vocab_projection(output_t), dim=-1)
 			log_p_t = log_p_t[:,t-1]
-
 			live_hyp_num = beam_size - len(completed_hypotheses)
 			contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
 			top_cand_hyp_scores, top_cand_hyp_pos = torch.topk(contiuating_hyp_scores, k=live_hyp_num)
+
 
 			prev_hyp_ids = top_cand_hyp_pos / len(self.vocab)
 			hyp_word_ids = top_cand_hyp_pos % len(self.vocab)
@@ -148,7 +151,12 @@ class Transformer(nn.Module):
 				cand_new_hyp_score = cand_new_hyp_score.item()
 
 				hyp_word = self.vocab_id2word[hyp_word_id]
-				new_hyp_sent = hypotheses[prev_hyp_id] + [hyp_word]
+				#new_hyp_sent = hypotheses[prev_hyp_id] + [hyp_word]
+				try:
+					new_hyp_sent = hypotheses[prev_hyp_id] + [hyp_word]
+				except:
+					return [Hypothesis(value=['a'], score=1)]
+
 				if hyp_word == '<end>':
 					completed_hypotheses.append(Hypothesis(value=new_hyp_sent[1:-1],
 														   score=cand_new_hyp_score))
@@ -221,7 +229,7 @@ class Encoder(nn.Module):
 	def __init__(self, model_size, num_heads, max_len, num_layers, hidden_size=2048,dropout=0.1):
 
 		super().__init__()
-		self.positional_encoder = PositionalEncoder(model_size, max_len)
+		self.positional_encoder = PositionalEncoder(model_size, max_len, dropout=0.5)
 		self.layers = nn.ModuleList([EncoderLayer(model_size, num_heads, hidden_size, dropout)
 										for _ in range(num_layers)])
 		self.layer_norm = nn.LayerNorm(model_size)
@@ -236,7 +244,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
 	def __init__(self, model_size, num_heads, max_len, num_layers, hidden_size=2048, dropout=0.1):
 		super().__init__()
-		self.positional_encoder = PositionalEncoder(model_size, max_len)
+		self.positional_encoder = PositionalEncoder(model_size, max_len, dropout=dropout)
 		self.layers = nn.ModuleList([DecoderLayer(model_size, num_heads, hidden_size, dropout)
 										for _ in range(num_layers)])
 		self.layer_norm = nn.LayerNorm(model_size)

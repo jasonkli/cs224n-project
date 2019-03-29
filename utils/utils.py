@@ -34,3 +34,9 @@ def custom_collate_fn(batch):
 	data = [elem[0] for elem in batch]
 	target = [elem[1] for elem in batch]
 	return [data, target]
+
+def custom_collate_fn2(batch):
+	data1 = [elem[0][0] for elem in batch]
+	data2 = [elem[0][1] for elem in batch]
+	target = [elem[1] for elem in batch]
+	return [(data1, data2), target]

@@ -9,30 +9,30 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dataset import LSTMMSVDDataset, P3DMSVDDataset
-from models import LSTMCombined, Transformer
+from dataset import LSTMMSVDDataset, P3DMSVDDataset, EnsembleMSVDDataset
+from models import LSTMCombined, Transformer, EnsembleCombined
 from models.lstm_no_att import LSTMBasic
 from os.path import join
-from utils import custom_collate_fn, make_clean_path
+from utils import custom_collate_fn, make_clean_path, custom_collate_fn2
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def get_arguments():
 	parser = argparse.ArgumentParser(description="Train arguements")
 	parser.add_argument('--lr', dest='lr', type=float, default=1e-4, help='Learning rate')
-	parser.add_argument('--clip', dest='clip', type=float, default=3.0, help='Clip gradient')
+	parser.add_argument('--clip', dest='clip', type=float, default=5.0, help='Clip gradient')
 	parser.add_argument('--max_epochs', dest='max_epochs', type=int, default=3000, help="Max epochs")
 	parser.add_argument('--batch_size', dest='batch_size', type=int, default=256, help="Batch size")
 	parser.add_argument('--sgd', dest='sgd', action="store_true", help='Use sgd instead of adam')
 	parser.add_argument('--train_iter', dest='train_iter', type=int, default=200)
 	parser.add_argument('--val_iter', dest='val_iter', type=int, default=2000)
 	parser.add_argument('--max_frames', dest='max_frames', type=int, default=32)
-	parser.add_argument('--patience', dest='patience', type=int, default=64)
+	parser.add_argument('--patience', dest='patience', type=int, default=8)
 	parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.3)
 	parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=1e-4)
 	parser.add_argument('--gamma', dest='gamma', type=float, default=5.0)
-	parser.add_argument('--directory', dest='directory', type=str, default=None)
-	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic', 'transformer', 'transformer_p3d'], default='lstm')
+	parser.add_argument('--directory', dest='directory', type=str, default='data/msvd')
+	parser.add_argument('--model', dest='model', type=str, choices=['lstm', 'p3d', 'basic', 'transformer', 'transformer_p3d', 'ensemble'], default='lstm')
 	parser.add_argument('--save_dir', dest='save_dir', default='checkpoints/')
 
 	return parser.parse_args()
@@ -68,52 +68,51 @@ def plot(x, y, path, label):
 
 
 def train(args):
-	data_path = 'data/msvd/new_word2id.json' if args.directory == 'data/mpii' else 'data/mpii/new_word2id_mpii.json'
-	embed_path = 'data/msvd/word_embed.npy' if args.directory == 'data/mpii' else 'data/mpii/word_embed_mpii.npy'
+	voc_path = 'data/msvd/new_word2id.json'
+	embed_path = 'data/msvd/word_embed.npy'
 	if args.model == 'lstm':
-		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
-					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_dataset = LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train')
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
-					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_dataset = LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val')
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 
 		#model = LSTMCombined('data/msvd/msvd_vocab.json', device=device)	
-		model = LSTMCombined(data_path, device=device, pre_embed=embed_path)	
+		model = LSTMCombined(voc_path, device=device, pre_embed=embed_path)	
 	elif args.model == 'p3d':
-		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
-					else P3DMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_dataset = P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train')
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
-					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_dataset = P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val')
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 
 		#model = LSTMCombined('data/msvd/msvd_vocab.json', device=device, encoder='p3d')
-		model = LSTMCombined(data_path, device=device, pre_embed=embed_path, encoder='p3d')	
+		model = LSTMCombined(voc_path, device=device, pre_embed=embed_path, encoder='p3d')	
 
 	elif args.model == 'transformer':
-		train_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
-					else LSTMMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_dataset = LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train')
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
-					else LSTMMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_dataset = LSTMMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val')
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
-		model = Transformer(data_path, pre_embed=embed_path)
+		model = Transformer(voc_path, pre_embed=embed_path)
 
 	elif args.model == 'transformer_p3d':
-		train_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train') if args.directory 
-					else P3DMSVDDataset(max_frames=args.max_frames, split='train'))
+		train_dataset = P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train')
 		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn)
 
-		val_dataset = (P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val') if args.directory 
-					else P3DMSVDDataset(max_frames=args.max_frames, split='val'))
+		val_dataset = P3DMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val')
 		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn)
 
-		model = Transformer(data_path, pre_embed=embed_path)
+		model = Transformer(voc_path, pre_embed=embed_path)
 
+	elif args.model == 'ensemble':
+		train_dataset = EnsembleMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='train')
+		train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,  collate_fn=custom_collate_fn2)
+
+		val_dataset = EnsembleMSVDDataset(directory=args.directory, max_frames=args.max_frames, split='val')
+		val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=custom_collate_fn2)
+		model = EnsembleCombined(voc_path, device=device, pre_embed=embed_path)	
 
 
 	"""elif args.model == 'basic':

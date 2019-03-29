@@ -242,6 +242,10 @@ class LSTMCombined(nn.Module):
         arg_dict['embed_size'] = self.embed_size
         arg_dict['dropout_rate'] = self.dropout_rate
         arg_dict['num_layers'] = self.num_layers
+        arg_dict['att_projection_dim'] = self.att_projection_dim
+        if self.pre_embed is not None:
+            arg_dict['pre_embed'] = self.pre_embed
+        
         
         with open(join(outpath, '{}.json'.format(key)), 'w') as f:
             json.dump(arg_dict, f)

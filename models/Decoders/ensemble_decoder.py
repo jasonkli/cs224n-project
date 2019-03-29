@@ -8,9 +8,9 @@ import torch.nn.utils
 import torch.nn.functional as F
 
 
-class EmsembleDecoder(nn.Module):
+class EnsembleDecoder(nn.Module):
     def __init__(self, embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_decoder_layers, device, dropout_rate=0.2):
-        super(LSTMDecoder, self).__init__()
+        super().__init__()
         self.embed_size = embed_size
         self.hidden_size_encoder = hidden_size_encoder
         self.hidden_size_decoder = hidden_size_decoder

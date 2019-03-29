@@ -22,7 +22,7 @@ class EnsembleCombined(nn.Module):
     def __init__(self, file_path, cnn_feature_size=2048, lstm_input_size=1024, hidden_size_encoder=1024, hidden_size_decoder=1024, 
                     embed_size=512, att_projection_dim=1024, num_layers=2, device='cpu', dropout_rate=0.3, pre_embed=None):
 
-        super(LSTMCombined, self).__init__()
+        super().__init__()
         self.cnn_feature_size = cnn_feature_size
         self.lstm_input_size = lstm_input_size
         self.hidden_size_encoder = hidden_size_encoder
@@ -48,7 +48,7 @@ class EnsembleCombined(nn.Module):
 
         self.lstm_encoder = LSTMEncoder(cnn_feature_size, lstm_input_size, hidden_size_encoder, hidden_size_decoder, num_layers, dropout_rate)
         self.p3d_encoder = P3DEncoder(cnn_feature_size, hidden_size_encoder, hidden_size_decoder, num_layers, dropout_rate) 
-        self.decoder = LSTMDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_layers, device, dropout_rate)
+        self.decoder = EnsembleDecoder(embed_size, hidden_size_encoder, hidden_size_decoder, att_projection_dim, num_layers, device, dropout_rate)
         self.dec_init_hidden_tranform = nn.Linear(2 * hidden_size_decoder, hidden_size_decoder)
         self.dec_init_cell_tranform = nn.Linear(2 * hidden_size_decoder, hidden_size_decoder)
         self.target_vocab_projection = nn.Linear(hidden_size_decoder, len(self.vocab))
@@ -83,11 +83,11 @@ class EnsembleCombined(nn.Module):
 
         dec_init_state_1 = (self.dec_init_hidden_tranform(torch.cat((lstm_dec_init_state_1[0], p3d_dec_init_state_1[0]), 1)), 
             self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_1[1], p3d_dec_init_state_1[1]), 1)))
-        if self.num_layers == 1:
-            dec_init_state_2 = None
-        else:
+       #if self.num_layers == 1:
+        dec_init_state_2 = None
+        """else:
             dec_init_state_2 = (self.dec_init_hidden_tranform(torch.cat((lstm_dec_init_state_2[0], p3d_dec_init_state_2[0]), 1)), 
-                self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_2[1], p3d_dec_init_state_2[1]), 1)))
+                self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_2[1], p3d_dec_init_state_2[1]), 1)))"""
         
         outputs = self.decoder(enc_hiddens, enc_masks, mapped_features, p3d_masks, dec_init_state_1, dec_init_state_2, captions_padded_embedded)
 
@@ -170,14 +170,13 @@ class EnsembleCombined(nn.Module):
         p3d_src_encodings, p3d_dec_init_vec_1, p3d_dec_init_vec_2  = self.p3d_encoder(feature_tensor, feature_length_vec)
         p3d_src_encodings_att_linear = self.decoder.p3d_att_projection(p3d_src_encodings)
 
-        dec_init_state_1 = (self.dec_init_hidden_tranform(torch.cat((lstm_dec_init_state_1[0], p3d_dec_init_state_1[0]), 1)), 
-            self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_1[1], p3d_dec_init_state_1[1]), 1)))
-        if self.num_layers == 1:
-            dec_init_state_2 = None
-        else:
+        dec_init_state_1 = (self.dec_init_hidden_tranform(torch.cat((lstm_dec_init_vec_1[0], p3d_dec_init_vec_1[0]), 1)), 
+            self.dec_init_cell_tranform(torch.cat((lstm_dec_init_vec_1[1], p3d_dec_init_vec_1[1]), 1)))
+        #if self.num_layers == 1:
+        dec_init_state_2 = None
+        """else:
             dec_init_state_2 = (self.dec_init_hidden_tranform(torch.cat((lstm_dec_init_state_2[0], p3d_dec_init_state_2[0]), 1)), 
-                self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_2[1], p3d_dec_init_state_2[1]), 1)))
-
+                self.dec_init_cell_tranform(torch.cat((lstm_dec_init_state_2[1], p3d_dec_init_state_2[1]), 1)))"""
 
         h_tm0 = dec_init_state_1
         h_tm1 = dec_init_state_2
@@ -208,7 +207,7 @@ class EnsembleCombined(nn.Module):
                                                      p3d_src_encodings.size(1),
                                                      p3d_src_encodings.size(2))
 
-            exp_p3d_rc_encodings_att_linear = p3d_src_encodings_att_linear.expand(hyp_num,
+            exp_p3d_src_encodings_att_linear = p3d_src_encodings_att_linear.expand(hyp_num,
                                                                            p3d_src_encodings_att_linear.size(1),
                                                                            p3d_src_encodings_att_linear.size(2))
 
@@ -218,7 +217,7 @@ class EnsembleCombined(nn.Module):
 
             
             dec_state_1, dec_state_2, output_t = self.decoder.step(y_t_embed, lstm_h_prev_dec, p3d_h_prev_dec, h_tm0, h_tm1, 
-                exp_lstm_src_encodings, exp_lstm_src_encodings_att_linear, enc_masks=None, exp_p3d_src_encodings, exp_sp3d_rc_encodings_att_linear, p3d_masks=None)         
+                exp_lstm_src_encodings, exp_lstm_src_encodings_att_linear, None, exp_p3d_src_encodings, exp_p3d_src_encodings_att_linear, None)         
             #(h_t0, cell_t0), (h_t, cell_t), att_t  = self.decoder.step(y_t_embed, att_tm1, h_tm0, h_tm1,
                                                       #exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
             (h_t0, cell_t0) = dec_state_1
@@ -288,6 +287,9 @@ class EnsembleCombined(nn.Module):
         arg_dict['embed_size'] = self.embed_size
         arg_dict['dropout_rate'] = self.dropout_rate
         arg_dict['num_layers'] = self.num_layers
+        arg_dict['att_projection_dim'] = self.att_projection_dim
+        if self.pre_embed is not None:
+            arg_dict['pre_embed'] = self.pre_embed
         
         with open(join(outpath, '{}.json'.format(key)), 'w') as f:
             json.dump(arg_dict, f)

@@ -44,12 +44,13 @@ class P3DFeatureExtractor(BaseFeatureExtractor):
 				sequence.append(img)
 			sequence = torch.stack(sequence, dim=1)
 			sequences.append(sequence)
-			if len(sequences) == 4:
-				break
+			#if len(sequences) == 4:
+				#break
 
 		x = torch.stack(sequences)
 		features = self.extract_features(x, device)
 		for i in range(features.size()[0]):
-			feature = features[i].view(features[i].size()[0], -1).transpose(0, 1)
+			#feature = features[i].view(features[i].size()[0], -1).transpose(0, 1)
+			feature = torch.squeeze(features[i])
 			np.save(join(outpath, '{}.npy'.format(img_ids[start + i * NUM_FRAMES])), feature.cpu().numpy())
 

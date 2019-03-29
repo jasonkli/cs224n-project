@@ -1,3 +1,5 @@
+# NOTE: We are not the original authors of this code. This was adapted from: https://github.com/qijiezhao/pseudo-3d-pytorch.git.
+
 from __future__ import print_function
 import torch
 import torch.nn as nn
@@ -257,15 +259,21 @@ class P3D(nn.Module):
 
         x = self.maxpool_2(self.layer1(x))  #  Part Res2
         x = self.maxpool_2(self.layer2(x))  #  Part Res3
+        #x = self.layer3(x)
         x = self.maxpool_2(self.layer3(x))  #  Part Res4
 
         sizes=x.size()
-        x = x.view(-1,sizes[1],sizes[3],sizes[4])  #  Part Res5
+        x = x.view(-1, sizes[1], sizes[2], sizes[3])
         x = self.layer4(x)
+        """x = x.permute(0, 2, 1, 3, 4).contiguous()
+        x = x.contiguous().view(-1,sizes[1],sizes[3],sizes[4])  #  Part Res5
+        x = self.layer4(x)
+        x = x.view(sizes[0], sizes[2], x.size()[1], x.size()[2], x.size()[3])
+        x = x.permute(0, 2, 1, 3, 4).contiguous()"""
         x = self.avgpool(x)
 
         x = x.view(-1,self.fc.in_features)
-        #x = self.fc(self.dropout(x))
+        #x = self.fc(self.dropout(x))"""
 
         return x
 
@@ -377,3 +385,4 @@ if __name__ == '__main__':
     model = model.cuda()
     data=torch.autograd.Variable(torch.rand(10,3,16,160,160)).cuda()   # if modality=='Flow', please change the 2nd dimension 3==>2
     out=model(data)
+    print (out.size(),out)

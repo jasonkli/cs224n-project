@@ -31,7 +31,7 @@ def extract_msvd_features():
 		imgs = sorted(imgs, key=lambda x: int(basename(normpath(x)).split('.')[0]))
 		img_ids = sorted([int(basename(normpath(img)).split('.')[0]) for img in imgs])
 		model.preprocess(imgs, img_ids, out, name, device)
-		break
+		
 
 
 def extract_mpii_features():
@@ -63,8 +63,8 @@ def extract_mpii_features():
 		
 
 def main():
-	#extract_msvd_features()
-	extract_mpii_features()
+	extract_msvd_features()
+	#extract_mpii_features()
 
 if __name__ == '__main__':
 	main()
